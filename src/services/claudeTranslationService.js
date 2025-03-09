@@ -1,10 +1,14 @@
+// src/services/claudeTranslationService.js
 import axios from 'axios';
 import { CLAUDE_API_KEY } from '@env';
-import QuizAnalysisCache from '../utils/QuizAnalysisCache';
+import GlobalTermsDatabase from '../utils/GlobalTermsDatabase';
+
+// Initialize the database when the service is first imported
+GlobalTermsDatabase.init();
 
 /**
  * Analyzes a question with Claude API to identify complicated terms and translate them
- * Tries to use cached results first, then falls back to API call
+ * Uses the global terms database first, then falls back to API call if needed
  * @param {string} questionText - The text of the citizenship test question
  * @param {string} language - The target language code for translation
  * @returns {Promise<Object>} - Object containing terms, explanations and translations
@@ -16,11 +20,15 @@ export const analyzeQuestion = async (questionText, language) => {
       return { terms: [] };
     }
 
-    // First, try to get analysis from cache
-    const cachedAnalysis = await QuizAnalysisCache.getFromCache(questionText, language);
-    if (cachedAnalysis) {
-      console.log('Using cached analysis for question');
-      return cachedAnalysis;
+    // First, check the global database for any existing terms
+    const existingTerms = GlobalTermsDatabase.analyzeText(questionText, language);
+    
+    // If we found terms in our database and they all have translations,
+    // return them without calling Claude API
+    const allHaveTranslations = existingTerms.every(term => !!term.translation);
+    if (existingTerms.length > 0 && allHaveTranslations) {
+      console.log('Using terms from global database:', existingTerms.length);
+      return { terms: existingTerms };
     }
 
     // Check if API key is available
@@ -90,10 +98,13 @@ Return ONLY a JSON object with this structure:
         const jsonStr = jsonMatch[0];
         const result = JSON.parse(jsonStr);
         
-        // Save result to cache before returning
-        await QuizAnalysisCache.saveToCache(questionText, language, result);
+        // Save these terms to the global database for future use
+        if (result.terms && Array.isArray(result.terms)) {
+          await saveTermsToGlobalDatabase(result.terms, language);
+        }
         
-        return result;
+        // Combine any existing terms from database with new ones from Claude
+        return mergeDatabaseAndClaudeResults(existingTerms, result.terms);
       }
     } catch (parseError) {
       console.error('Error parsing Claude response:', parseError);
@@ -110,6 +121,7 @@ Return ONLY a JSON object with this structure:
 
 /**
  * Analyzes a question and its options with Claude API
+ * Uses the global database first, then calls Claude if needed
  * @param {string} questionText - The question text
  * @param {string[]} options - The answer options
  * @param {string} language - The target language code
@@ -121,14 +133,18 @@ export const analyzeQuestionAndOptions = async (questionText, options, language)
       return { terms: [] };
     }
 
-    // Create a composite key for caching
+    // Create a composite text for analysis
     const fullText = `${questionText} ${options.join(' ')}`;
     
-    // First, try to get analysis from cache
-    const cachedAnalysis = await QuizAnalysisCache.getFromCache(fullText, language);
-    if (cachedAnalysis) {
-      console.log('Using cached analysis for question and options');
-      return cachedAnalysis;
+    // First, check the global database for any existing terms
+    const existingTerms = GlobalTermsDatabase.analyzeText(fullText, language);
+    
+    // If we found terms in our database and they all have translations,
+    // return them without calling Claude API
+    const allHaveTranslations = existingTerms.every(term => !!term.translation);
+    if (existingTerms.length > 0 && allHaveTranslations) {
+      console.log('Using terms from global database:', existingTerms.length);
+      return { terms: existingTerms };
     }
 
     // Check if API key is available
@@ -204,10 +220,13 @@ Return ONLY a JSON object with this structure:
         const jsonStr = jsonMatch[0];
         const result = JSON.parse(jsonStr);
         
-        // Save result to cache before returning
-        await QuizAnalysisCache.saveToCache(fullText, language, result);
+        // Save these terms to the global database for future use
+        if (result.terms && Array.isArray(result.terms)) {
+          await saveTermsToGlobalDatabase(result.terms, language);
+        }
         
-        return result;
+        // Combine any existing terms from database with new ones from Claude
+        return mergeDatabaseAndClaudeResults(existingTerms, result.terms);
       }
     } catch (parseError) {
       console.error('Error parsing Claude response:', parseError);
@@ -220,6 +239,63 @@ Return ONLY a JSON object with this structure:
     console.error('Error calling Claude API:', error);
     return getFallbackAnalysis(questionText + ' ' + options.join(' '), language);
   }
+};
+
+/**
+ * Save terms and translations to the global database
+ * @param {Array} terms - Array of term objects
+ * @param {string} language - The language code
+ * @returns {Promise<void>}
+ */
+const saveTermsToGlobalDatabase = async (terms, language) => {
+  try {
+    if (!terms || !Array.isArray(terms)) return;
+    
+    for (const termObj of terms) {
+      const { term, explanation, translation } = termObj;
+      
+      if (term && explanation) {
+        await GlobalTermsDatabase.addTerm(term, explanation);
+      }
+      
+      if (term && translation) {
+        await GlobalTermsDatabase.addTranslation(term, language, translation);
+      }
+    }
+    
+    console.log(`Saved ${terms.length} terms to global database`);
+  } catch (error) {
+    console.error('Error saving terms to global database:', error);
+  }
+};
+
+/**
+ * Merge terms from database and Claude API results
+ * @param {Array} dbTerms - Terms from database
+ * @param {Array} claudeTerms - Terms from Claude API
+ * @returns {Object} - Combined results
+ */
+const mergeDatabaseAndClaudeResults = (dbTerms, claudeTerms) => {
+  // Create a map of terms to easily identify duplicates
+  const termsMap = new Map();
+  
+  // Add database terms first
+  dbTerms.forEach(term => {
+    termsMap.set(term.term.toLowerCase(), term);
+  });
+  
+  // Add or update with Claude terms
+  claudeTerms.forEach(term => {
+    const lowercaseTerm = term.term.toLowerCase();
+    // Only add if not already in the map, or update if we now have a translation
+    if (!termsMap.has(lowercaseTerm) || 
+        (!termsMap.get(lowercaseTerm).translation && term.translation)) {
+      termsMap.set(lowercaseTerm, term);
+    }
+  });
+  
+  // Convert map back to array
+  return { terms: Array.from(termsMap.values()) };
 };
 
 // Enhanced fallback terms for offline use
@@ -296,8 +372,23 @@ const fallbackTerms = {
   }
 };
 
+// Import fallback terms into the global database on initialization
+// This ensures we have some data to work with even before any API calls
+(async function() {
+  await GlobalTermsDatabase.importPredefinedTerms(fallbackTerms);
+})();
+
 // Fallback function to use when Claude API is unavailable
 export const getFallbackAnalysis = (text, language = 'en') => {
+  // First check the global database
+  const databaseTerms = GlobalTermsDatabase.analyzeText(text, language);
+  
+  // If we have terms from the database, use those
+  if (databaseTerms.length > 0) {
+    return { terms: databaseTerms };
+  }
+  
+  // Otherwise use the static fallback terms
   const terms = [];
   const lowerText = text.toLowerCase();
   
@@ -308,8 +399,8 @@ export const getFallbackAnalysis = (text, language = 'en') => {
         term: term,
         explanation: fallbackTerms[term].explanation,
         translation: fallbackTerms[term].translations[language] || 
-                     fallbackTerms[term].translations['en'] || 
-                     term
+                    fallbackTerms[term].translations['en'] || 
+                    term
       });
     }
   });
