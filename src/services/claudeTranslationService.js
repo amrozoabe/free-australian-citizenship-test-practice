@@ -1,3 +1,6 @@
+import axios from 'axios';
+import { CLAUDE_API_KEY } from '@env';
+
 /**
  * Analyzes a question with Claude API to identify complicated terms and translate them
  * @param {string} questionText - The text of the citizenship test question
@@ -6,10 +9,19 @@
  */
 export const analyzeQuestion = async (questionText, language) => {
   try {
-    if (!questionText) {
+    if (!questionText || !language) {
+      console.log('Missing question text or language');
       return { terms: [] };
     }
 
+    // Check if API key is available
+    if (!CLAUDE_API_KEY) {
+      console.error('Claude API key is not set in environment variables');
+      return { terms: [] };
+    }
+
+    console.log('Analyzing question with Claude API...');
+    
     // Create the prompt for Claude
     const prompt = `
 You are helping non-English speakers prepare for the Australian citizenship test.
@@ -58,6 +70,8 @@ Return ONLY a JSON object with this structure:
       }
     );
     
+    console.log('Claude API response received');
+    
     // Parse the response
     const content = response.data.content[0].text;
     try {
@@ -87,10 +101,18 @@ Return ONLY a JSON object with this structure:
  */
 export const analyzeQuestionAndOptions = async (questionText, options, language) => {
   try {
-    if (!questionText) {
+    if (!questionText || !options || !language) {
       return { terms: [] };
     }
 
+    // Check if API key is available
+    if (!CLAUDE_API_KEY) {
+      console.error('Claude API key is not set in environment variables');
+      return { terms: [] };
+    }
+
+    console.log('Analyzing question and options with Claude API...');
+    
     // Create the prompt for Claude
     const prompt = `
 You are helping non-native English speakers prepare for the Australian citizenship test.
@@ -145,6 +167,8 @@ Return ONLY a JSON object with this structure:
       }
     );
     
+    console.log('Claude API response received');
+    
     // Parse the response
     const content = response.data.content[0].text;
     try {
@@ -165,23 +189,56 @@ Return ONLY a JSON object with this structure:
   }
 };
 
-/**
- * Mock function for testing without API - simple version
- */
-export const mockAnalyzeQuestion = (questionText, language) => {
-  return { terms: [] };
+// Adding console-based fallback for when API fails
+const fallbackTerms = {
+  "democracy": {
+    explanation: "A system of government where people choose their leaders by voting",
+    translations: {
+      "zh-CN": "民主",
+      "es": "democracia",
+      "fr": "démocratie"
+    }
+  },
+  "citizenship": {
+    explanation: "Being an official member of a country with rights and responsibilities",
+    translations: {
+      "zh-CN": "公民身份",
+      "es": "ciudadanía",
+      "fr": "citoyenneté"
+    }
+  },
+  "constitution": {
+    explanation: "The set of basic laws that defines how a country is governed",
+    translations: {
+      "zh-CN": "宪法",
+      "es": "constitución",
+      "fr": "constitution"
+    }
+  }
 };
 
-/**
- * Mock function for testing - simple version
- */
-export const mockAnalyzeQuestionAndOptions = (questionText, options, language) => {
-  return { terms: [] };
+// Fallback function to use when Claude API is unavailable
+export const getFallbackAnalysis = (text, language = 'en') => {
+  const terms = [];
+  
+  // Very simple matching
+  Object.keys(fallbackTerms).forEach(term => {
+    if (text.toLowerCase().includes(term.toLowerCase())) {
+      terms.push({
+        term: term,
+        explanation: fallbackTerms[term].explanation,
+        translation: fallbackTerms[term].translations[language] || 
+                     fallbackTerms[term].translations['en'] || 
+                     term
+      });
+    }
+  });
+  
+  return { terms };
 };
 
 export default {
   analyzeQuestion,
   analyzeQuestionAndOptions,
-  mockAnalyzeQuestion,
-  mockAnalyzeQuestionAndOptions
+  getFallbackAnalysis
 };

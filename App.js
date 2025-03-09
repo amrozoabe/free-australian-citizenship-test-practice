@@ -5,7 +5,7 @@ import { QuizProvider } from './src/contexts/QuizContext';
 import HomeScreen from './src/screens/HomeScreen';
 import QuizScreen from './src/screens/QuizScreen';
 import ResultScreen from './src/screens/ResultScreen';
-import StudyMaterialsScreen from './src/screens/StudyMaterialsScreen';
+import StudyScreen from './src/screens/StudyScreen';
 import StatisticsScreen from './src/screens/StatisticsScreen';
 import BookmarksScreen from './src/screens/BookmarksScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
@@ -20,7 +20,7 @@ export default function App() {
           <Stack.Screen name="Home" component={HomeScreen} />
           <Stack.Screen name="Quiz" component={QuizScreen} />
           <Stack.Screen name="Result" component={ResultScreen} />
-          <Stack.Screen name="StudyMaterials" component={StudyMaterialsScreen} />
+          <Stack.Screen name="Study" component={StudyScreen} />
           <Stack.Screen name="Statistics" component={StatisticsScreen} />
           <Stack.Screen name="Bookmarks" component={BookmarksScreen} />
           <Stack.Screen name="Settings" component={SettingsScreen} />

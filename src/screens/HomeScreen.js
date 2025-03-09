@@ -72,7 +72,7 @@ export default function HomeScreen({ navigation }) {
           <MenuButton
             title="Study Materials"
             icon="📚"
-            onPress={() => navigation.navigate('StudyMaterials')}
+            onPress={() => navigation.navigate('Study')}
             color="#34C759"
           />
           <MenuButton
@@ -102,12 +102,12 @@ export default function HomeScreen({ navigation }) {
         </View>
 
         {/* Additional Info */}
-        {state.lastStudyDate && (
+        {statistics.lastStudyDate && (
           <Text style={[
             styles.lastStudied,
             { color: settings.theme === 'dark' ? '#ccc' : '#666' }
           ]}>
-            Last studied: {new Date(state.lastStudyDate).toLocaleDateString()}
+            Last studied: {new Date(statistics.lastStudyDate).toLocaleDateString()}
           </Text>
         )}
       </ScrollView>

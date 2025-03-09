@@ -4,7 +4,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 export const SET_NATIVE_LANGUAGE = 'SET_NATIVE_LANGUAGE';
 const QuizContext = createContext();
 
-const STORAGE_KEYS = {
+// Define storage keys and default settings directly in this file
+const storageKeys = {
   SCORES: '@quiz_scores',
   BOOKMARKS: '@quiz_bookmarks',
   PROGRESS: '@quiz_progress',
@@ -12,18 +13,20 @@ const STORAGE_KEYS = {
   COMPLETED_QUESTIONS: '@quiz_completed'
 };
 
+const defaultSettings = {
+  theme: 'light',
+  soundEnabled: true,
+  vibrationEnabled: true,
+  timerEnabled: true,
+  nativeLanguage: 'en',
+};
+
 export function QuizProvider({ children }) {
   const [state, setState] = useState({
     scores: [],
     bookmarks: [],
     progress: {},
-    settings: {
-      theme: 'light',
-      soundEnabled: true,
-      vibrationEnabled: true,
-      timerEnabled: true,
-      nativeLanguage: 'en',  // Add this line
-    },
+    settings: defaultSettings,
     statistics: {
       totalQuestions: 0,
       correctAnswers: 0,
@@ -51,11 +54,11 @@ export function QuizProvider({ children }) {
         settingsData,
         completedData
       ] = await Promise.all([
-        AsyncStorage.getItem(STORAGE_KEYS.SCORES),
-        AsyncStorage.getItem(STORAGE_KEYS.BOOKMARKS),
-        AsyncStorage.getItem(STORAGE_KEYS.PROGRESS),
-        AsyncStorage.getItem(STORAGE_KEYS.SETTINGS),
-        AsyncStorage.getItem(STORAGE_KEYS.COMPLETED_QUESTIONS),
+        AsyncStorage.getItem(storageKeys.SCORES),
+        AsyncStorage.getItem(storageKeys.BOOKMARKS),
+        AsyncStorage.getItem(storageKeys.PROGRESS),
+        AsyncStorage.getItem(storageKeys.SETTINGS),
+        AsyncStorage.getItem(storageKeys.COMPLETED_QUESTIONS),
       ]);
 
       setState(prevState => ({
@@ -63,7 +66,7 @@ export function QuizProvider({ children }) {
         scores: scoresData ? JSON.parse(scoresData) : [],
         bookmarks: bookmarksData ? JSON.parse(bookmarksData) : [],
         progress: progressData ? JSON.parse(progressData) : {},
-        settings: settingsData ? JSON.parse(settingsData) : prevState.settings,
+        settings: settingsData ? JSON.parse(settingsData) : defaultSettings,
         completedQuestions: completedData ? JSON.parse(completedData) : {},
         isLoading: false,
       }));
@@ -85,7 +88,7 @@ export function QuizProvider({ children }) {
       averageScore: Math.round(averageScore * 100) / 100,
       timeSpent: scores.reduce((acc, score) => acc + (score.timeSpent || 0), 0),
       streakDays: calculateStreak(scores),
-      lastStudyDate: scores[scores.length - 1]?.date || null,
+      lastStudyDate: scores.length > 0 ? scores[scores.length - 1]?.date : null,
     };
   };
 
@@ -115,7 +118,7 @@ export function QuizProvider({ children }) {
         switch (action.type) {
           case 'ADD_SCORE': {
             const newScores = [...state.scores, action.payload];
-            await AsyncStorage.setItem(STORAGE_KEYS.SCORES, JSON.stringify(newScores));
+            await AsyncStorage.setItem(storageKeys.SCORES, JSON.stringify(newScores));
             setState(prevState => ({
               ...prevState,
               scores: newScores,
@@ -124,13 +127,13 @@ export function QuizProvider({ children }) {
             break;
           }
 
-          case 'SET_NATIVE_LANGUAGE': {
+          case SET_NATIVE_LANGUAGE: {
             const newSettings = {
               ...state.settings,
               nativeLanguage: action.payload
             };
             
-            await AsyncStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(newSettings));
+            await AsyncStorage.setItem(storageKeys.SETTINGS, JSON.stringify(newSettings));
             setState(prevState => ({
               ...prevState,
               settings: newSettings
@@ -144,7 +147,7 @@ export function QuizProvider({ children }) {
               ? state.bookmarks.filter(id => id !== questionId)
               : [...state.bookmarks, questionId];
             
-            await AsyncStorage.setItem(STORAGE_KEYS.BOOKMARKS, JSON.stringify(newBookmarks));
+            await AsyncStorage.setItem(storageKeys.BOOKMARKS, JSON.stringify(newBookmarks));
             setState(prevState => ({
               ...prevState,
               bookmarks: newBookmarks
@@ -161,7 +164,7 @@ export function QuizProvider({ children }) {
               }
             };
             
-            await AsyncStorage.setItem(STORAGE_KEYS.PROGRESS, JSON.stringify(newProgress));
+            await AsyncStorage.setItem(storageKeys.PROGRESS, JSON.stringify(newProgress));
             setState(prevState => ({
               ...prevState,
               progress: newProgress
@@ -175,7 +178,7 @@ export function QuizProvider({ children }) {
               ...action.payload
             };
             
-            await AsyncStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(newSettings));
+            await AsyncStorage.setItem(storageKeys.SETTINGS, JSON.stringify(newSettings));
             setState(prevState => ({
               ...prevState,
               settings: newSettings
@@ -193,7 +196,7 @@ export function QuizProvider({ children }) {
               }
             };
             
-            await AsyncStorage.setItem(STORAGE_KEYS.COMPLETED_QUESTIONS, JSON.stringify(newCompleted));
+            await AsyncStorage.setItem(storageKeys.COMPLETED_QUESTIONS, JSON.stringify(newCompleted));
             setState(prevState => ({
               ...prevState,
               completedQuestions: newCompleted
@@ -210,9 +213,9 @@ export function QuizProvider({ children }) {
 
           case 'RESET_PROGRESS': {
             await Promise.all([
-              AsyncStorage.removeItem(STORAGE_KEYS.SCORES),
-              AsyncStorage.removeItem(STORAGE_KEYS.PROGRESS),
-              AsyncStorage.removeItem(STORAGE_KEYS.COMPLETED_QUESTIONS),
+              AsyncStorage.removeItem(storageKeys.SCORES),
+              AsyncStorage.removeItem(storageKeys.PROGRESS),
+              AsyncStorage.removeItem(storageKeys.COMPLETED_QUESTIONS),
             ]);
             
             setState(prevState => ({

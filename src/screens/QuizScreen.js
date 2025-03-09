@@ -1,4 +1,3 @@
-// src/screens/QuizScreen.js
 import React, { useState, useEffect } from 'react';
 import { 
   View, 
@@ -10,13 +9,11 @@ import {
   Animated,
   Vibration,
   Alert,
-  Modal,
-  ActivityIndicator
+  Modal
 } from 'react-native';
 import { useQuiz } from '../contexts/QuizContext';
 import { questions } from '../data/questions';
 import QuestionExplainer from '../components/quiz/QuestionExplainer';
-// Import the Claude service - use mock for testing without API key
 import claudeService from '../services/claudeTranslationService';
 import HelpModal from '../components/quiz/HelpModal';
 
@@ -40,7 +37,6 @@ function shuffleOptions(question) {
   };
 }
 
-// Modify the existing shuffleArray function to include option randomization
 function shuffleArray(array) {
   const newArray = [...array];
   for (let i = newArray.length - 1; i > 0; i--) {
@@ -60,7 +56,7 @@ export default function QuizScreen({ navigation, route }) {
   const [showQuestionList, setShowQuestionList] = useState(false);
   const [termsAnalysis, setTermsAnalysis] = useState([]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  // New state variables for help modal
+  // Help modal state variables
   const [showHelpModal, setShowHelpModal] = useState(false);
   const [helpTerms, setHelpTerms] = useState([]);
   const [isLoadingHelp, setIsLoadingHelp] = useState(false);
@@ -78,7 +74,7 @@ export default function QuizScreen({ navigation, route }) {
     setAnswers(new Array(selectedQuestions.length).fill(null));
   }, [mode]);
 
-  // Effect to analyze the current question with Claude
+  // Effect to analyze the current question
   useEffect(() => {
     if (quizQuestions.length > 0) {
       analyzeCurrentQuestion();
@@ -99,20 +95,35 @@ export default function QuizScreen({ navigation, route }) {
     setTermsAnalysis([]);
     
     try {
-      // Use the mock service for testing without API
-      // In production, replace with the real API call
-      // const result = await claudeService.analyzeQuestion(questionText, state.settings?.nativeLanguage || 'en');
-      const result = await claudeService.mockAnalyzeQuestion(questionText, state.settings?.nativeLanguage || 'en');
+      const result = await claudeService.analyzeQuestion(
+        questionText, 
+        state.settings?.nativeLanguage || 'en'
+      );
       
-      setTermsAnalysis(result.terms || []);
+      // Check if we got terms back, if not use fallback
+      if (!result.terms || result.terms.length === 0) {
+        const fallbackResult = claudeService.getFallbackAnalysis(
+          questionText,
+          state.settings?.nativeLanguage || 'en'
+        );
+        setTermsAnalysis(fallbackResult.terms || []);
+      } else {
+        setTermsAnalysis(result.terms || []);
+      }
     } catch (error) {
       console.error('Error analyzing question:', error);
+      // Use fallback analysis if API call fails
+      const fallbackResult = claudeService.getFallbackAnalysis(
+        questionText,
+        state.settings?.nativeLanguage || 'en'
+      );
+      setTermsAnalysis(fallbackResult.terms || []);
     } finally {
       setIsAnalyzing(false);
     }
   };
 
-  // New function to handle the help button press
+  // Function to handle the help button press
   const handleHelpPress = async () => {
     setShowHelpModal(true);
     setIsLoadingHelp(true);
@@ -126,22 +137,37 @@ export default function QuizScreen({ navigation, route }) {
         ? currentQ.question 
         : currentQ.question?.text || '';
       
-      // Use the mock service for testing without API
-      // In production, replace with the real API call
-      // const result = await claudeService.analyzeQuestionAndOptions(
-      //   questionText, 
-      //   currentQ.options, 
-      //   state.settings?.nativeLanguage || 'en'
-      // );
-      const result = await claudeService.mockAnalyzeQuestionAndOptions(
+      const result = await claudeService.analyzeQuestionAndOptions(
         questionText, 
         currentQ.options, 
         state.settings?.nativeLanguage || 'en'
       );
       
-      setHelpTerms(result.terms || []);
+      // Check if we got terms back, if not use fallback
+      if (!result.terms || result.terms.length === 0) {
+        const fallbackResult = claudeService.getFallbackAnalysis(
+          questionText + ' ' + currentQ.options.join(' '),
+          state.settings?.nativeLanguage || 'en'
+        );
+        setHelpTerms(fallbackResult.terms || []);
+      } else {
+        setHelpTerms(result.terms || []);
+      }
     } catch (error) {
       console.error('Error getting help:', error);
+      // Use fallback analysis if API call fails
+      const currentQ = quizQuestions[currentQuestion];
+      if (currentQ) {
+        const questionText = typeof currentQ.question === 'string'
+          ? currentQ.question
+          : currentQ.question?.text || '';
+        
+        const fallbackResult = claudeService.getFallbackAnalysis(
+          questionText + ' ' + currentQ.options.join(' '),
+          state.settings?.nativeLanguage || 'en'
+        );
+        setHelpTerms(fallbackResult.terms || []);
+      }
     } finally {
       setIsLoadingHelp(false);
     }
@@ -288,8 +314,6 @@ export default function QuizScreen({ navigation, route }) {
     </Modal>
   );
 
-  // Use imported HelpModal component
-
   if (quizQuestions.length === 0) {
     return (
       <View style={styles.container}>
@@ -401,11 +425,11 @@ export default function QuizScreen({ navigation, route }) {
             </View>
           )}
           
-          {/* Explanations and Translations - consider removing this if using the Help button approach */}
-          {/* <QuestionExplainer 
+          {/* Terms analysis */}
+          <QuestionExplainer 
             terms={termsAnalysis} 
             isLoading={isAnalyzing}
-          /> */}
+          />
         </Animated.View>
 
         {/* Navigation buttons */}
@@ -475,7 +499,7 @@ const styles = StyleSheet.create({
   questionText: {
     fontSize: 22,
     fontWeight: '600',
-    marginBottom: 15, // Reduced for help button
+    marginBottom: 15,
   },
   helpButton: {
     backgroundColor: '#f0f0f0',
@@ -570,7 +594,6 @@ const styles = StyleSheet.create({
     borderRadius: 15,
     padding: 20,
   },
-
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -611,5 +634,4 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
   },
-
 });
