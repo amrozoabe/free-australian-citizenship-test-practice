@@ -1,3 +1,4 @@
+// src/screens/QuizScreen.js
 import React, { useState, useEffect } from 'react';
 import { 
   View, 
@@ -10,13 +11,14 @@ import {
   Vibration,
   Alert,
   Modal,
-  Pressable
+  ActivityIndicator
 } from 'react-native';
 import { useQuiz } from '../contexts/QuizContext';
 import { questions } from '../data/questions';
-import InteractiveQuestionText from '../components/quiz/InteractiveQuestionText';
-// import { ComplexTermTooltip } ftice/src/components/quiz/ComplexTermTooltip.js';
-import QuestionText from '../components/quiz/QuestionText';
+import QuestionExplainer from '../components/quiz/QuestionExplainer';
+// Import the Claude service - use mock for testing without API key
+import claudeService from '../services/claudeTranslationService';
+import HelpModal from '../components/quiz/HelpModal';
 
 function shuffleOptions(question) {
   const options = [...question.options];
@@ -56,11 +58,16 @@ export default function QuizScreen({ navigation, route }) {
   const [fadeAnim] = useState(new Animated.Value(1));
   const [quizQuestions, setQuizQuestions] = useState([]);
   const [showQuestionList, setShowQuestionList] = useState(false);
+  const [termsAnalysis, setTermsAnalysis] = useState([]);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  // New state variables for help modal
+  const [showHelpModal, setShowHelpModal] = useState(false);
+  const [helpTerms, setHelpTerms] = useState([]);
+  const [isLoadingHelp, setIsLoadingHelp] = useState(false);
+  
   const { state, dispatch } = useQuiz();
-  const [activeDefinition, setActiveDefinition] = useState(null);
   const mode = route.params?.mode || 'full';
 
-  // Keep this useEffect for initialization
   useEffect(() => {
     const shuffledQuestions = shuffleArray(questions);
     const selectedQuestions = mode === 'practice' 
@@ -69,13 +76,76 @@ export default function QuizScreen({ navigation, route }) {
     setQuizQuestions(selectedQuestions);
     // Initialize answers array
     setAnswers(new Array(selectedQuestions.length).fill(null));
-    setActiveDefinition(null);
   }, [mode]);
 
-// Add this new useEffect for handling definition clearing
+  // Effect to analyze the current question with Claude
   useEffect(() => {
-    setActiveDefinition(null);
-  }, [currentQuestion]);
+    if (quizQuestions.length > 0) {
+      analyzeCurrentQuestion();
+    }
+  }, [currentQuestion, quizQuestions]);
+
+  const analyzeCurrentQuestion = async () => {
+    if (quizQuestions.length === 0) return;
+    
+    const currentQ = quizQuestions[currentQuestion];
+    if (!currentQ) return;
+    
+    const questionText = typeof currentQ.question === 'string' 
+      ? currentQ.question 
+      : currentQ.question?.text || '';
+    
+    setIsAnalyzing(true);
+    setTermsAnalysis([]);
+    
+    try {
+      // Use the mock service for testing without API
+      // In production, replace with the real API call
+      // const result = await claudeService.analyzeQuestion(questionText, state.settings?.nativeLanguage || 'en');
+      const result = await claudeService.mockAnalyzeQuestion(questionText, state.settings?.nativeLanguage || 'en');
+      
+      setTermsAnalysis(result.terms || []);
+    } catch (error) {
+      console.error('Error analyzing question:', error);
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
+  // New function to handle the help button press
+  const handleHelpPress = async () => {
+    setShowHelpModal(true);
+    setIsLoadingHelp(true);
+    setHelpTerms([]);
+    
+    try {
+      const currentQ = quizQuestions[currentQuestion];
+      if (!currentQ) return;
+      
+      const questionText = typeof currentQ.question === 'string' 
+        ? currentQ.question 
+        : currentQ.question?.text || '';
+      
+      // Use the mock service for testing without API
+      // In production, replace with the real API call
+      // const result = await claudeService.analyzeQuestionAndOptions(
+      //   questionText, 
+      //   currentQ.options, 
+      //   state.settings?.nativeLanguage || 'en'
+      // );
+      const result = await claudeService.mockAnalyzeQuestionAndOptions(
+        questionText, 
+        currentQ.options, 
+        state.settings?.nativeLanguage || 'en'
+      );
+      
+      setHelpTerms(result.terms || []);
+    } catch (error) {
+      console.error('Error getting help:', error);
+    } finally {
+      setIsLoadingHelp(false);
+    }
+  };
 
   const handleAnswer = (selectedIndex) => {
     // Don't do anything if already answered in quiz mode
@@ -85,7 +155,7 @@ export default function QuizScreen({ navigation, route }) {
     
     if (isCorrect) {
       setScore(score + 1);
-    } else if (state.settings?.vibrationEnabled) { // Fixed settings reference
+    } else if (state.settings?.vibrationEnabled) {
       Vibration.vibrate(200);
     }
   
@@ -159,30 +229,6 @@ export default function QuizScreen({ navigation, route }) {
     ]).start();
   };
 
-  // Add this component inside QuizScreen but before the return statement
-  const ExplanationSection = () => {
-    if (!activeDefinition) return null;
-
-    return (
-      <View style={styles.explanationSection}>
-        <Text style={styles.explanationTitle}>Definition:</Text>
-        <Text style={styles.explanationText}>{activeDefinition.definition}</Text>
-        
-        {activeDefinition.userLanguage && 
-         activeDefinition.translations?.[activeDefinition.userLanguage] && (
-          <>
-            <Text style={[styles.explanationTitle, { marginTop: 12 }]}>
-              Translation ({activeDefinition.userLanguage}):
-            </Text>
-            <Text style={styles.explanationText}>
-              {activeDefinition.translations[activeDefinition.userLanguage]}
-            </Text>
-          </>
-        )}
-      </View>
-    );
-  };
-
   // Question List Modal
   const QuestionListModal = () => (
     <Modal
@@ -194,12 +240,12 @@ export default function QuizScreen({ navigation, route }) {
       <View style={styles.modalOverlay}>
         <View style={[
           styles.modalContent,
-          { backgroundColor: state.theme === 'dark' ? '#333' : 'white' }
+          { backgroundColor: state.settings?.theme === 'dark' ? '#333' : 'white' }
         ]}>
           <View style={styles.modalHeader}>
             <Text style={[
               styles.modalTitle,
-              { color: state.theme === 'dark' ? '#fff' : '#1a1a1a' }
+              { color: state.settings?.theme === 'dark' ? '#fff' : '#1a1a1a' }
             ]}>
               Questions
             </Text>
@@ -219,10 +265,12 @@ export default function QuizScreen({ navigation, route }) {
                 onPress={() => handleQuestionSelect(index)}
               >
                 <Text style={[
-                    styles.questionItemText,
-                    { color: state.theme === 'dark' ? '#fff' : '#1a1a1a' }
-                  ]}>
-                    {index + 1}. {(q.question?.text || q.question || '').substring(0, 50)}...
+                  styles.questionItemText,
+                  { color: state.settings?.theme === 'dark' ? '#fff' : '#1a1a1a' }
+                ]}>
+                  {index + 1}. {typeof q.question === 'string' 
+                    ? q.question.substring(0, 50) 
+                    : q.question?.text?.substring(0, 50) || ''}...
                 </Text>
                 {answers[index] && (
                   <Text style={[
@@ -240,6 +288,8 @@ export default function QuizScreen({ navigation, route }) {
     </Modal>
   );
 
+  // Use imported HelpModal component
+
   if (quizQuestions.length === 0) {
     return (
       <View style={styles.container}>
@@ -248,12 +298,23 @@ export default function QuizScreen({ navigation, route }) {
     );
   }
 
+  const currentQuestionText = typeof quizQuestions[currentQuestion].question === 'string'
+    ? quizQuestions[currentQuestion].question
+    : quizQuestions[currentQuestion].question?.text || '';
+
   return (
     <SafeAreaView style={[
       styles.container,
-      { backgroundColor: state.theme === 'dark' ? '#1a1a1a' : '#f5f5f5' }
+      { backgroundColor: state.settings?.theme === 'dark' ? '#1a1a1a' : '#f5f5f5' }
     ]}>
       <QuestionListModal />
+      <HelpModal
+        visible={showHelpModal}
+        onClose={() => setShowHelpModal(false)}
+        isLoading={isLoadingHelp}
+        terms={helpTerms}
+        isDarkMode={state.settings?.theme === 'dark'}
+      />
       
       <ScrollView contentContainerStyle={styles.scrollContainer}>
 
@@ -269,7 +330,7 @@ export default function QuizScreen({ navigation, route }) {
           >
             <Text style={[
               styles.questionCounterText,
-              { color: state.theme === 'dark' ? '#fff' : '#1a1a1a' }
+              { color: state.settings?.theme === 'dark' ? '#fff' : '#1a1a1a' }
             ]}>
               {currentQuestion + 1} / {quizQuestions.length}
             </Text>
@@ -282,52 +343,70 @@ export default function QuizScreen({ navigation, route }) {
 
         {/* Question content */}
         <Animated.View style={{ opacity: fadeAnim }}>
-        <QuestionText 
-          text={quizQuestions[currentQuestion]?.question?.text || quizQuestions[currentQuestion]?.question || ""}
-          terms={quizQuestions[currentQuestion]?.question?.terms}
-          userLanguage={state?.settings?.nativeLanguage || 'en'}  // Updated to use nativeLanguage
-          onTermPress={setActiveDefinition}  // Add this line
-        />
+          <Text style={[
+            styles.questionText,
+            { color: state.settings?.theme === 'dark' ? '#fff' : '#1a1a1a' }
+          ]}>
+            {currentQuestionText}
+          </Text>
 
-        <View style={styles.optionsContainer}>
-          {quizQuestions[currentQuestion].options.map((option, index) => (
-            <TouchableOpacity
-              key={`option-${index}`}
-              style={[
-                styles.optionButton,
-                answers[currentQuestion]?.selectedIndex === index && styles.selectedOption,
-                answers[currentQuestion] && index === quizQuestions[currentQuestion].correct && 
-                  styles.correctOption,
-                answers[currentQuestion]?.selectedIndex === index && 
-                !answers[currentQuestion].isCorrect && styles.wrongOption
-              ]}
-              onPress={() => handleAnswer(index)}
-              disabled={mode !== 'practice' && Boolean(answers[currentQuestion])}
-            >
-              <QuestionText 
-                text={option}
-                terms={quizQuestions[currentQuestion]?.terms}
-                userLanguage={state?.settings?.language || 'english'}
-                onTermPress={setActiveDefinition}
-              />
-            </TouchableOpacity>
-          ))}
-        </View>
+          {/* Help button */}
+          <TouchableOpacity 
+            style={styles.helpButton}
+            onPress={handleHelpPress}
+          >
+            <Text style={styles.helpButtonText}>Need Help? 🔍</Text>
+          </TouchableOpacity>
+
+          <View style={styles.optionsContainer}>
+            {quizQuestions[currentQuestion].options.map((option, index) => (
+              <TouchableOpacity
+                key={`option-${index}`}
+                style={[
+                  styles.optionButton,
+                  answers[currentQuestion]?.selectedIndex === index && styles.selectedOption,
+                  answers[currentQuestion] && index === quizQuestions[currentQuestion].correct && 
+                    styles.correctOption,
+                  answers[currentQuestion]?.selectedIndex === index && 
+                  !answers[currentQuestion].isCorrect && styles.wrongOption
+                ]}
+                onPress={() => handleAnswer(index)}
+                disabled={mode !== 'practice' && Boolean(answers[currentQuestion])}
+              >
+                <Text style={[
+                  styles.optionText,
+                  { color: state.settings?.theme === 'dark' ? '#fff' : '#1a1a1a' }
+                ]}>
+                  {option}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
 
           {/* Explanation */}
           {answers[currentQuestion] && (
             <View style={styles.explanationContainer}>
-              <QuestionText 
-                text={quizQuestions[currentQuestion]?.explanation || ""}
-                terms={quizQuestions[currentQuestion]?.terms}
-                userLanguage={state?.settings?.language || 'english'}
-                onTermPress={setActiveDefinition}  // Add this
-              />
+              <Text style={[
+                styles.explanationTitle,
+                { color: state.settings?.theme === 'dark' ? '#fff' : '#1a1a1a' }
+              ]}>
+                Explanation:
+              </Text>
+              <Text style={[
+                styles.explanationText,
+                { color: state.settings?.theme === 'dark' ? '#ddd' : '#333' }
+              ]}>
+                {quizQuestions[currentQuestion].explanation}
+              </Text>
             </View>
           )}
+          
+          {/* Explanations and Translations - consider removing this if using the Help button approach */}
+          {/* <QuestionExplainer 
+            terms={termsAnalysis} 
+            isLoading={isAnalyzing}
+          /> */}
         </Animated.View>
-
-        <ExplanationSection />
 
         {/* Navigation buttons */}
         <View style={styles.navigationButtons}>
@@ -353,9 +432,6 @@ export default function QuizScreen({ navigation, route }) {
             </TouchableOpacity>
           )}
         </View>
-
-        <InteractiveQuestionText questionText={currentQuestion.text} />
-
       </ScrollView>
     </SafeAreaView>
   );
@@ -396,10 +472,31 @@ const styles = StyleSheet.create({
   modeIndicator: {
     fontSize: 16,
   },
-  question: {
+  questionText: {
     fontSize: 22,
     fontWeight: '600',
-    marginBottom: 30,
+    marginBottom: 15, // Reduced for help button
+  },
+  helpButton: {
+    backgroundColor: '#f0f0f0',
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 20,
+    paddingVertical: 8,
+    paddingHorizontal: 15,
+    alignSelf: 'flex-end',
+    marginBottom: 15,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  helpButtonText: {
+    color: '#007AFF',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  optionsContainer: {
+    marginTop: 10,
+    marginBottom: 20,
   },
   optionButton: {
     backgroundColor: 'white',
@@ -408,6 +505,9 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     borderWidth: 1,
     borderColor: '#ddd',
+  },
+  optionText: {
+    fontSize: 16,
   },
   selectedOption: {
     backgroundColor: '#e3f2fd',
@@ -421,28 +521,21 @@ const styles = StyleSheet.create({
     backgroundColor: '#fdecea',
     borderColor: '#f44336',
   },
-  optionText: {
-    fontSize: 16,
-  },
-  explanationSection: {
-    marginTop: 20,
+  explanationContainer: {
     padding: 15,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: 'rgba(0, 0, 0, 0.05)',
     borderRadius: 10,
-    borderLeftWidth: 4,
-    borderLeftColor: '#2196F3',
+    marginTop: 10,
+    marginBottom: 20,
   },
   explanationTitle: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#000',
     marginBottom: 8,
   },
   explanationText: {
-    fontSize: 16,
+    fontSize: 14,
     lineHeight: 22,
-    color: '#333',
-    marginBottom: 10,
   },
   navigationButtons: {
     flexDirection: 'row',
@@ -477,6 +570,7 @@ const styles = StyleSheet.create({
     borderRadius: 15,
     padding: 20,
   },
+
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -493,10 +587,6 @@ const styles = StyleSheet.create({
   },
   questionList: {
     maxHeight: '90%',
-  },
-  optionsContainer: {
-    marginTop: 20,
-    marginBottom: 20,
   },
   questionItem: {
     flexDirection: 'row',
@@ -521,4 +611,5 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
   },
+
 });
