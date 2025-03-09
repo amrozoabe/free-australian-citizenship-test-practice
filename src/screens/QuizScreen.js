@@ -74,55 +74,6 @@ export default function QuizScreen({ navigation, route }) {
     setAnswers(new Array(selectedQuestions.length).fill(null));
   }, [mode]);
 
-  // Effect to analyze the current question
-  useEffect(() => {
-    if (quizQuestions.length > 0) {
-      analyzeCurrentQuestion();
-    }
-  }, [currentQuestion, quizQuestions]);
-
-  const analyzeCurrentQuestion = async () => {
-    if (quizQuestions.length === 0) return;
-    
-    const currentQ = quizQuestions[currentQuestion];
-    if (!currentQ) return;
-    
-    const questionText = typeof currentQ.question === 'string' 
-      ? currentQ.question 
-      : currentQ.question?.text || '';
-    
-    setIsAnalyzing(true);
-    setTermsAnalysis([]);
-    
-    try {
-      const result = await claudeService.analyzeQuestion(
-        questionText, 
-        state.settings?.nativeLanguage || 'en'
-      );
-      
-      // Check if we got terms back, if not use fallback
-      if (!result.terms || result.terms.length === 0) {
-        const fallbackResult = claudeService.getFallbackAnalysis(
-          questionText,
-          state.settings?.nativeLanguage || 'en'
-        );
-        setTermsAnalysis(fallbackResult.terms || []);
-      } else {
-        setTermsAnalysis(result.terms || []);
-      }
-    } catch (error) {
-      console.error('Error analyzing question:', error);
-      // Use fallback analysis if API call fails
-      const fallbackResult = claudeService.getFallbackAnalysis(
-        questionText,
-        state.settings?.nativeLanguage || 'en'
-      );
-      setTermsAnalysis(fallbackResult.terms || []);
-    } finally {
-      setIsAnalyzing(false);
-    }
-  };
-
   // Function to handle the help button press
   const handleHelpPress = async () => {
     setShowHelpModal(true);
@@ -143,16 +94,9 @@ export default function QuizScreen({ navigation, route }) {
         state.settings?.nativeLanguage || 'en'
       );
       
-      // Check if we got terms back, if not use fallback
-      if (!result.terms || result.terms.length === 0) {
-        const fallbackResult = claudeService.getFallbackAnalysis(
-          questionText + ' ' + currentQ.options.join(' '),
-          state.settings?.nativeLanguage || 'en'
-        );
-        setHelpTerms(fallbackResult.terms || []);
-      } else {
-        setHelpTerms(result.terms || []);
-      }
+      // Set the terms for both the help modal and the question explanation section
+      setHelpTerms(result.terms || []);
+      setTermsAnalysis(result.terms || []);
     } catch (error) {
       console.error('Error getting help:', error);
       // Use fallback analysis if API call fails
@@ -167,6 +111,7 @@ export default function QuizScreen({ navigation, route }) {
           state.settings?.nativeLanguage || 'en'
         );
         setHelpTerms(fallbackResult.terms || []);
+        setTermsAnalysis(fallbackResult.terms || []);
       }
     } finally {
       setIsLoadingHelp(false);
@@ -201,11 +146,14 @@ export default function QuizScreen({ navigation, route }) {
     if (currentQuestion < quizQuestions.length - 1) {
       animateTransition();
       setCurrentQuestion(currentQuestion + 1);
+      // Clear any existing terms analysis when moving to a new question
+      setTermsAnalysis([]);
     } else if (mode === 'practice') {
       // In practice mode, go back to the first question
       animateTransition();
       setCurrentQuestion(0);
       setAnswers(new Array(quizQuestions.length).fill(null)); // Reset answers
+      setTermsAnalysis([]);
     } else {
       // In quiz mode, go to results
       navigation.navigate('Result', { 
@@ -220,6 +168,8 @@ export default function QuizScreen({ navigation, route }) {
     if (currentQuestion > 0) {
       animateTransition();
       setCurrentQuestion(currentQuestion - 1);
+      // Clear any existing terms analysis when moving to a new question
+      setTermsAnalysis([]);
     }
   };
 
@@ -227,6 +177,8 @@ export default function QuizScreen({ navigation, route }) {
     setShowQuestionList(false);
     animateTransition();
     setCurrentQuestion(index);
+    // Clear any existing terms analysis when moving to a new question
+    setTermsAnalysis([]);
   };
 
   const handleExit = () => {
@@ -425,11 +377,13 @@ export default function QuizScreen({ navigation, route }) {
             </View>
           )}
           
-          {/* Terms analysis */}
-          <QuestionExplainer 
-            terms={termsAnalysis} 
-            isLoading={isAnalyzing}
-          />
+          {/* Terms analysis - only shown after "Need Help?" is clicked */}
+          {termsAnalysis.length > 0 && (
+            <QuestionExplainer 
+              terms={termsAnalysis} 
+              isLoading={isAnalyzing}
+            />
+          )}
         </Animated.View>
 
         {/* Navigation buttons */}

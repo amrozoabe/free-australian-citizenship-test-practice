@@ -1,8 +1,10 @@
 import axios from 'axios';
 import { CLAUDE_API_KEY } from '@env';
+import QuizAnalysisCache from '../utils/QuizAnalysisCache';
 
 /**
  * Analyzes a question with Claude API to identify complicated terms and translate them
+ * Tries to use cached results first, then falls back to API call
  * @param {string} questionText - The text of the citizenship test question
  * @param {string} language - The target language code for translation
  * @returns {Promise<Object>} - Object containing terms, explanations and translations
@@ -14,10 +16,17 @@ export const analyzeQuestion = async (questionText, language) => {
       return { terms: [] };
     }
 
+    // First, try to get analysis from cache
+    const cachedAnalysis = await QuizAnalysisCache.getFromCache(questionText, language);
+    if (cachedAnalysis) {
+      console.log('Using cached analysis for question');
+      return cachedAnalysis;
+    }
+
     // Check if API key is available
     if (!CLAUDE_API_KEY) {
       console.error('Claude API key is not set in environment variables');
-      return { terms: [] };
+      return getFallbackAnalysis(questionText, language);
     }
 
     console.log('Analyzing question with Claude API...');
@@ -79,16 +88,23 @@ Return ONLY a JSON object with this structure:
       const jsonMatch = content.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         const jsonStr = jsonMatch[0];
-        return JSON.parse(jsonStr);
+        const result = JSON.parse(jsonStr);
+        
+        // Save result to cache before returning
+        await QuizAnalysisCache.saveToCache(questionText, language, result);
+        
+        return result;
       }
     } catch (parseError) {
       console.error('Error parsing Claude response:', parseError);
     }
 
-    return { terms: [] };
+    // If we get here, we couldn't parse the result
+    const fallbackResult = getFallbackAnalysis(questionText, language);
+    return fallbackResult;
   } catch (error) {
     console.error('Error calling Claude API:', error);
-    return { terms: [] };
+    return getFallbackAnalysis(questionText, language);
   }
 };
 
@@ -105,10 +121,20 @@ export const analyzeQuestionAndOptions = async (questionText, options, language)
       return { terms: [] };
     }
 
+    // Create a composite key for caching
+    const fullText = `${questionText} ${options.join(' ')}`;
+    
+    // First, try to get analysis from cache
+    const cachedAnalysis = await QuizAnalysisCache.getFromCache(fullText, language);
+    if (cachedAnalysis) {
+      console.log('Using cached analysis for question and options');
+      return cachedAnalysis;
+    }
+
     // Check if API key is available
     if (!CLAUDE_API_KEY) {
       console.error('Claude API key is not set in environment variables');
-      return { terms: [] };
+      return getFallbackAnalysis(fullText, language);
     }
 
     console.log('Analyzing question and options with Claude API...');
@@ -176,25 +202,38 @@ Return ONLY a JSON object with this structure:
       const jsonMatch = content.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         const jsonStr = jsonMatch[0];
-        return JSON.parse(jsonStr);
+        const result = JSON.parse(jsonStr);
+        
+        // Save result to cache before returning
+        await QuizAnalysisCache.saveToCache(fullText, language, result);
+        
+        return result;
       }
     } catch (parseError) {
       console.error('Error parsing Claude response:', parseError);
     }
 
-    return { terms: [] };
+    // If we get here, we couldn't parse the result
+    const fallbackResult = getFallbackAnalysis(fullText, language);
+    return fallbackResult;
   } catch (error) {
     console.error('Error calling Claude API:', error);
-    return { terms: [] };
+    return getFallbackAnalysis(questionText + ' ' + options.join(' '), language);
   }
 };
 
-// Adding console-based fallback for when API fails
+// Enhanced fallback terms for offline use
 const fallbackTerms = {
   "democracy": {
     explanation: "A system of government where people choose their leaders by voting",
     translations: {
       "zh-CN": "民主",
+      "zh-TW": "民主",
+      "ar": "ديمقراطية",
+      "pa": "ਲੋਕਤੰਤਰ",
+      "hi": "लोकतंत्र",
+      "fil": "demokrasya",
+      "vi": "dân chủ",
       "es": "democracia",
       "fr": "démocratie"
     }
@@ -203,6 +242,12 @@ const fallbackTerms = {
     explanation: "Being an official member of a country with rights and responsibilities",
     translations: {
       "zh-CN": "公民身份",
+      "zh-TW": "公民身份",
+      "ar": "المواطنة",
+      "pa": "ਨਾਗਰਿਕਤਾ",
+      "hi": "नागरिकता",
+      "fil": "pagkamamamayan",
+      "vi": "quốc tịch",
       "es": "ciudadanía",
       "fr": "citoyenneté"
     }
@@ -211,8 +256,42 @@ const fallbackTerms = {
     explanation: "The set of basic laws that defines how a country is governed",
     translations: {
       "zh-CN": "宪法",
+      "zh-TW": "憲法",
+      "ar": "الدستور",
+      "pa": "ਸੰਵਿਧਾਨ",
+      "hi": "संविधान",
+      "fil": "konstitusyon",
+      "vi": "hiến pháp",
       "es": "constitución",
       "fr": "constitution"
+    }
+  },
+  "parliament": {
+    explanation: "The group of elected people who make the laws in a country",
+    translations: {
+      "zh-CN": "议会",
+      "zh-TW": "議會",
+      "ar": "البرلمان",
+      "pa": "ਸੰਸਦ",
+      "hi": "संसद",
+      "fil": "parlamento",
+      "vi": "quốc hội",
+      "es": "parlamento",
+      "fr": "parlement"
+    }
+  },
+  "referendum": {
+    explanation: "A direct vote by all citizens on an important issue or law",
+    translations: {
+      "zh-CN": "公民投票",
+      "zh-TW": "公民投票",
+      "ar": "استفتاء",
+      "pa": "ਜਨਮਤ ਸੰਗ੍ਰਹਿ",
+      "hi": "जनमत संग्रह",
+      "fil": "reperendum",
+      "vi": "trưng cầu dân ý",
+      "es": "referéndum",
+      "fr": "référendum"
     }
   }
 };
@@ -220,10 +299,11 @@ const fallbackTerms = {
 // Fallback function to use when Claude API is unavailable
 export const getFallbackAnalysis = (text, language = 'en') => {
   const terms = [];
+  const lowerText = text.toLowerCase();
   
-  // Very simple matching
+  // Check all fallback terms against the text
   Object.keys(fallbackTerms).forEach(term => {
-    if (text.toLowerCase().includes(term.toLowerCase())) {
+    if (lowerText.includes(term.toLowerCase())) {
       terms.push({
         term: term,
         explanation: fallbackTerms[term].explanation,
