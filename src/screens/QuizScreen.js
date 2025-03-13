@@ -47,7 +47,7 @@ function shuffleArray(array) {
 }
 
 function getQuestionsForQuiz(allQuestions, mode, category) {
-  // If in practice mode with a specific category, return questions from that category
+  // If in practice mode with a specific category, return questions from that section
   if (mode === 'practice' && category) {
     // Map category IDs to sections
     const categoryToSection = {
@@ -64,6 +64,11 @@ function getQuestionsForQuiz(allQuestions, mode, category) {
       const sectionQuestions = allQuestions.filter(q => q.section === sectionName);
       return shuffleArray(sectionQuestions).map(q => shuffleOptions(q));
     }
+  }
+  
+  // For practice mode without category, return all shuffled questions
+  if (mode === 'practice' && !category) {
+    return shuffleArray(allQuestions).map(q => shuffleOptions(q));
   }
   
   // For a regular quiz, select 5 questions from each section
@@ -131,6 +136,9 @@ export default function QuizScreen({ navigation, route }) {
     
     // Initialize answers array
     setAnswers(new Array(finalQuestions.length).fill(null));
+    
+    // Log the number of questions for debugging
+    console.log(`Quiz mode: ${mode}, category: ${category}, questions: ${finalQuestions.length}`);
   }, [mode, category]);
 
   // Function to handle the help button press
