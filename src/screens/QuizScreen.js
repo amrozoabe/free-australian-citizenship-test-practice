@@ -43,8 +43,61 @@ function shuffleArray(array) {
     const j = Math.floor(Math.random() * (i + 1));
     [newArray[i], newArray[j]] = [newArray[j], newArray[i]];
   }
-  // Shuffle options for each question
-  return newArray.map(question => shuffleOptions(question));
+  return newArray;
+}
+
+function getQuestionsForQuiz(allQuestions, mode, category) {
+  // If in practice mode with a specific category, return questions from that category
+  if (mode === 'practice' && category) {
+    // Map category IDs to sections
+    const categoryToSection = {
+      'part1': 'Part 1: Australia and its people',
+      'part2': 'Part 2: Australia\'s democratic beliefs, rights and liberties',
+      'part3': 'Part 3: Government and the law in Australia',
+      'part4': 'Part 4: Australian values'
+    };
+    
+    const sectionName = categoryToSection[category];
+    
+    if (sectionName) {
+      // Filter questions for this section and shuffle them
+      const sectionQuestions = allQuestions.filter(q => q.section === sectionName);
+      return shuffleArray(sectionQuestions).map(q => shuffleOptions(q));
+    }
+  }
+  
+  // For a regular quiz, select 5 questions from each section
+  if (mode === 'full' || mode === 'quiz') {
+    const sections = [
+      'Part 1: Australia and its people',
+      'Part 2: Australia\'s democratic beliefs, rights and liberties',
+      'Part 3: Government and the law in Australia',
+      'Part 4: Australian values'
+    ];
+    
+    // Group questions by section
+    const questionsBySection = {};
+    sections.forEach(section => {
+      questionsBySection[section] = allQuestions.filter(q => q.section === section);
+    });
+    
+    // Select and shuffle 5 questions from each section
+    let selectedQuestions = [];
+    sections.forEach(section => {
+      const sectionQuestions = questionsBySection[section];
+      const shuffledSectionQuestions = shuffleArray(sectionQuestions);
+      selectedQuestions = [
+        ...selectedQuestions,
+        ...shuffledSectionQuestions.slice(0, 5)
+      ];
+    });
+    
+    // Shuffle the combined questions again to mix the sections
+    return shuffleArray(selectedQuestions).map(q => shuffleOptions(q));
+  }
+  
+  // Default: return all shuffled questions
+  return shuffleArray(allQuestions).map(q => shuffleOptions(q));
 }
 
 export default function QuizScreen({ navigation, route }) {
@@ -63,16 +116,22 @@ export default function QuizScreen({ navigation, route }) {
   
   const { state, dispatch } = useQuiz();
   const mode = route.params?.mode || 'full';
+  const category = route.params?.category;
 
   useEffect(() => {
-    const shuffledQuestions = shuffleArray(questions);
-    const selectedQuestions = mode === 'practice' 
-      ? shuffledQuestions
-      : shuffledQuestions.slice(0, 20);
-    setQuizQuestions(selectedQuestions);
+    // Get questions based on mode and category
+    const selectedQuestions = getQuestionsForQuiz(questions, mode, category);
+    
+    // If in quiz mode, limit to 20 questions (which should be 5 from each section)
+    const finalQuestions = (mode === 'full' || mode === 'quiz') && selectedQuestions.length > 20 
+      ? selectedQuestions.slice(0, 20) 
+      : selectedQuestions;
+    
+    setQuizQuestions(finalQuestions);
+    
     // Initialize answers array
-    setAnswers(new Array(selectedQuestions.length).fill(null));
-  }, [mode]);
+    setAnswers(new Array(finalQuestions.length).fill(null));
+  }, [mode, category]);
 
   // Function to handle the help button press
   const handleHelpPress = async () => {
@@ -317,6 +376,16 @@ export default function QuizScreen({ navigation, route }) {
           </Text>
         </View>
 
+        {/* Section indicator */}
+        {quizQuestions[currentQuestion]?.section && (
+          <Text style={[
+            styles.sectionIndicator,
+            { color: state.settings?.theme === 'dark' ? '#ccc' : '#666' }
+          ]}>
+            {quizQuestions[currentQuestion].section}
+          </Text>
+        )}
+
         {/* Question content */}
         <Animated.View style={{ opacity: fadeAnim }}>
           <Text style={[
@@ -428,7 +497,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 10,
   },
   exitButton: {
     padding: 10,
@@ -449,6 +518,12 @@ const styles = StyleSheet.create({
   },
   modeIndicator: {
     fontSize: 16,
+  },
+  sectionIndicator: {
+    fontSize: 14,
+    fontStyle: 'italic',
+    marginBottom: 15,
+    textAlign: 'center',
   },
   questionText: {
     fontSize: 22,

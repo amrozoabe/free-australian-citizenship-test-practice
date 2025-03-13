@@ -2,53 +2,54 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, ScrollView } from 'react-native';
 import { useQuiz } from '../contexts/QuizContext';
 
+// Define study materials based on the four sections of the Australian Citizenship Test
 const studyMaterials = [
   {
-    id: 'australian-values',
-    title: 'Australian Values',
-    description: 'Learn about democracy, equality, and freedom',
-    icon: '🤝',
+    id: 'part1',
+    title: 'Part 1: Australia and its people',
+    description: 'Learn about Australia\'s history, geography, and culture',
+    icon: '🇦🇺',
     topics: [
+      'Aboriginal and Torres Strait Islander peoples',
+      'European settlement and migration',
+      'Important historical events',
+      'National symbols and holidays'
+    ]
+  },
+  {
+    id: 'part2',
+    title: 'Part 2: Australia\'s democratic beliefs, rights and liberties',
+    description: 'Understanding democracy, freedom and equality',
+    icon: '🗳️',
+    topics: [
+      'Parliamentary democracy',
+      'Rule of law',
       'Freedom of speech and association',
-      'Religious freedom and secular government',
-      'Equality under the law',
-      'Equal opportunities for all'
+      'Equal rights and opportunities'
     ]
   },
   {
-    id: 'history',
-    title: 'Australian History',
-    description: 'Discover Australia\'s rich history and heritage',
-    icon: '📚',
-    topics: [
-      'Indigenous Australian history',
-      'European settlement',
-      'Federation and democracy',
-      'Modern Australia'
-    ]
-  },
-  {
-    id: 'government',
-    title: 'Government & Laws',
-    description: 'Understanding Australia\'s political system',
+    id: 'part3',
+    title: 'Part 3: Government and the Law in Australia',
+    description: 'Learn about Australia\'s system of government',
     icon: '⚖️',
     topics: [
       'Three levels of government',
       'The Australian Constitution',
-      'Voting system',
-      'Rights and responsibilities'
+      'Roles of parliament, courts, and police',
+      'Rights and responsibilities of citizens'
     ]
   },
   {
-    id: 'symbols',
-    title: 'National Symbols',
-    description: 'Learn about Australian flags and emblems',
-    icon: '🇦🇺',
+    id: 'part4',
+    title: 'Part 4: Australian values',
+    description: 'Core values that unite Australians',
+    icon: '🤝',
     topics: [
-      'The Australian flag',
-      'Indigenous flags',
-      'National anthem',
-      'Coat of arms'
+      'Freedom and dignity of the individual',
+      'Freedom of religion and secular government',
+      'Equality of men and women',
+      'Mutual respect and tolerance'
     ]
   }
 ];
@@ -56,6 +57,10 @@ const studyMaterials = [
 export default function StudyScreen({ navigation }) {
   const { state } = useQuiz();
   const { settings } = state;
+
+  const handleExit = () => {
+    navigation.navigate('Home');
+  };
 
   const StudyCard = ({ item }) => (
     <TouchableOpacity
@@ -117,21 +122,26 @@ export default function StudyScreen({ navigation }) {
       styles.container,
       { backgroundColor: settings.theme === 'dark' ? '#1a1a1a' : '#f5f5f5' }
     ]}>
+      <View style={styles.header}>
+        <TouchableOpacity onPress={handleExit} style={styles.exitButton}>
+          <Text style={styles.exitButtonText}>← Back</Text>
+        </TouchableOpacity>
+        <Text style={[
+          styles.headerTitle,
+          { color: settings.theme === 'dark' ? '#fff' : '#1a1a1a' }
+        ]}>
+          Study Materials
+        </Text>
+        <View style={styles.exitButton} />
+      </View>
+      
       <ScrollView style={styles.scrollView}>
-        <View style={styles.header}>
-          <Text style={[
-            styles.title,
-            { color: settings.theme === 'dark' ? '#fff' : '#1a1a1a' }
-          ]}>
-            Study Materials
-          </Text>
-          <Text style={[
-            styles.subtitle,
-            { color: settings.theme === 'dark' ? '#ccc' : '#666' }
-          ]}>
-            Select a topic to study and practice
-          </Text>
-        </View>
+        <Text style={[
+          styles.introText,
+          { color: settings.theme === 'dark' ? '#ccc' : '#666' }
+        ]}>
+          Review these key topics from the Australian citizenship test study guide to prepare for your test. Practice questions for each section.
+        </Text>
 
         <View style={styles.cardsContainer}>
           {studyMaterials.map((item) => (
@@ -147,30 +157,41 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 20,
+    paddingTop: 60, // Extra padding for notch
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+  },
+  exitButton: {
+    width: 80,
+  },
+  exitButtonText: {
+    color: '#007AFF',
+    fontSize: 16,
+  },
   scrollView: {
     flex: 1,
-  },
-  header: {
     padding: 20,
-    paddingTop: 10,
   },
-  title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    marginBottom: 10,
-  },
-  subtitle: {
+  introText: {
     fontSize: 16,
     marginBottom: 20,
+    lineHeight: 24,
   },
   cardsContainer: {
-    padding: 10,
+    marginBottom: 30,
   },
   card: {
     backgroundColor: 'white',
     borderRadius: 15,
     padding: 20,
-    marginBottom: 15,
+    marginBottom: 20,
     elevation: 2,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -190,7 +211,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   cardTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: 'bold',
     marginBottom: 5,
   },
