@@ -2,55 +2,292 @@
 import axios from 'axios';
 import { CLAUDE_API_KEY } from '@env';
 import GlobalTermsDatabase from '../utils/GlobalTermsDatabase';
+import QuizAnalysisCache from '../utils/QuizAnalysisCache';
 
 // Initialize the database when the service is first imported
 GlobalTermsDatabase.init();
 
+// Enhanced identifyKeyTerms function for Claude Translation Service
+
 /**
- * Analyzes a question with Claude API to identify complicated terms and translate them
- * Uses the global terms database first, then falls back to API call if needed
- * @param {string} questionText - The text of the citizenship test question
- * @param {string} language - The target language code for translation
+ * Improved method to identify key citizenship terms from text
+ * Uses a more comprehensive pattern matching approach
+ * @param {string} text - The text to analyze
+ * @returns {string[]} - Array of identified key terms
+ */
+const identifyKeyTerms = (text) => {
+  if (!text) return [];
+
+  // Common Australian citizenship test keywords to look for
+  const citizenshipKeywords = [
+    // Existing keywords
+    'anzac', 'aboriginal', 'torres strait', 'democracy', 'parliament', 'constitution',
+    'federation', 'governor', 'prime minister', 'referendum', 'commonwealth',
+    'legislation', 'national', 'citizenship', 'migrants', 'settlers', 'flag',
+    'anthem', 'indigenous', 'monarchy', 'government', 'election', 'vote',
+    'senate', 'representative', 'court', 'law', 'rights', 'responsibilities',
+    'values', 'freedom', 'equality', 'mateship', 'gallipoli', 'nation',
+    
+    // Added national anthem related terms
+    'australians', 'rejoice', 'beneath', 'radiant', 'southern cross', 'young', 'free',
+    'national anthem', 'advance australia fair', 'girt', 'sea', 'golden soil', 'wealth',
+    'toil', 'nature', 'beauty', 'history', 'page', 'commonwealth', 'star',
+    
+    // Added general vocabulary that might be challenging
+    'sentence', 'symbol', 'emblem', 'oath', 'pledge', 'allegiance', 'sovereign',
+    'ceremony', 'heritage', 'tradition', 'culture', 'identity', 'boundary', 'territory',
+    'resident', 'eligibility', 'requirement'
+  ];
+
+  // Additional terms that are always relevant to check
+  const alwaysCheckTerms = [
+    'national anthem', 'southern cross', 'young and free', 'let us rejoice',
+    'beneath', 'radiant', 'sentence', 'australians all'
+  ];
+  
+  // Define a function to identify potential terms in the text
+  const normalizedText = text.toLowerCase();
+  const identifiedTerms = new Set();
+  
+  // First, check for any specifically defined always-check terms
+  alwaysCheckTerms.forEach(term => {
+    if (normalizedText.includes(term.toLowerCase())) {
+      identifiedTerms.add(term);
+    }
+  });
+
+  // Split text into words and clean them
+  const words = normalizedText.split(/\s+/);
+  const cleanWords = words.map(word => word.trim().replace(/[.,!?'"()]/g, ''));
+  
+  // Find single-word matches
+  cleanWords.forEach(word => {
+    if (word && citizenshipKeywords.includes(word)) {
+      identifiedTerms.add(word);
+    }
+    
+    // Also look for words not in the predefined list that might be important
+    // These are usually longer words or proper nouns
+    if (word.length > 6 && !commonWords.has(word)) {
+      identifiedTerms.add(word);
+    }
+  });
+
+  // Find multi-word phrases (2-3 words)
+  for (let i = 0; i < words.length - 1; i++) {
+    // Try two-word combinations
+    const twoWordPhrase = (cleanWords[i] + ' ' + cleanWords[i+1]).trim();
+    if (citizenshipKeywords.includes(twoWordPhrase)) {
+      identifiedTerms.add(twoWordPhrase);
+    }
+    
+    // Try three-word combinations
+    if (i < words.length - 2) {
+      const threeWordPhrase = (cleanWords[i] + ' ' + cleanWords[i+1] + ' ' + cleanWords[i+2]).trim();
+      if (citizenshipKeywords.includes(threeWordPhrase)) {
+        identifiedTerms.add(threeWordPhrase);
+      }
+    }
+  }
+
+  // Look for proper nouns (capitalized words) in the original text
+  const properNouns = text.match(/\b[A-Z][a-z]{2,}\b/g) || [];
+  properNouns.forEach(noun => {
+    identifiedTerms.add(noun.toLowerCase());
+  });
+  
+  // Look for quotations, which often contain important phrases
+  const quotations = text.match(/["'](.+?)["']/g) || [];
+  quotations.forEach(quote => {
+    // Remove the quotes and add the content
+    const cleanQuote = quote.replace(/["']/g, '').toLowerCase();
+    identifiedTerms.add(cleanQuote);
+    
+    // If the quote contains multiple words, also add those individually
+    const quoteWords = cleanQuote.split(/\s+/);
+    quoteWords.forEach(word => {
+      if (word.length > 3 && !commonWords.has(word)) {
+        identifiedTerms.add(word);
+      }
+    });
+  });
+
+  // Make sure we're not returning too many terms (limit to 20 most important)
+  return Array.from(identifiedTerms).slice(0, 20);
+};
+
+// List of common words to ignore
+const commonWords = new Set([
+  'the', 'and', 'that', 'have', 'for', 'not', 'with', 'you', 'this', 'but',
+  'his', 'her', 'they', 'from', 'she', 'will', 'been', 'has', 'are', 'was',
+  'all', 'who', 'what', 'when', 'why', 'how', 'where', 'which', 'there',
+  'than', 'them', 'then', 'its', 'our', 'we', 'were'
+]);
+
+export default identifyKeyTerms;
+
+/**
+ * Analyzes a question and its options with Claude API
+ * Uses the global database first, then calls Claude if needed
+ * Enhanced to identify more terms and ensure comprehensive coverage
+ * 
+ * @param {string} questionText - The question text
+ * @param {string[]} options - The answer options
+ * @param {string} language - The target language code
  * @returns {Promise<Object>} - Object containing terms, explanations and translations
  */
-export const analyzeQuestion = async (questionText, language) => {
+export const analyzeQuestionAndOptions = async (questionText, options, language) => {
   try {
-    if (!questionText || !language) {
-      console.log('Missing question text or language');
+    if (!questionText || !options || !language) {
       return { terms: [] };
     }
 
-    // First, check the global database for any existing terms
-    const existingTerms = GlobalTermsDatabase.analyzeText(questionText, language);
+    // Create a composite text for analysis
+    const fullText = `${questionText} ${options.join(' ')}`;
     
+    // Check cache first
+    const cachedResult = await QuizAnalysisCache.getFromCache(fullText, language);
+    
+    // Identify key terms from the question and options
+    const keyTerms = identifyKeyTerms(fullText);
+    console.log('Identified key terms:', keyTerms);
+    
+    // Check the global database for any existing terms
+    const existingTerms = GlobalTermsDatabase.analyzeText(fullText, language, keyTerms);
+    
+    // If we have cached results, use them but ensure all identified terms are included
+    if (cachedResult) {
+      console.log('Using cached analysis result, but checking for additional terms');
+      
+      // Create a set of terms from the cached result
+      const cachedTermsSet = new Set(cachedResult.terms.map(t => t.term.toLowerCase()));
+      
+      // Check if all current key terms are in the cached result
+      const allTermsCovered = keyTerms.every(term => 
+        cachedTermsSet.has(term) || cachedTermsSet.has(term.toLowerCase())
+      );
+      
+      // If all terms are already covered, just return the cached result
+      if (allTermsCovered) {
+        console.log('All key terms are covered in cached result');
+        return cachedResult;
+      }
+      
+      // Otherwise, we should augment the cached result with new terms from the database
+      console.log('Some key terms are missing from cached result, augmenting...');
+      const combinedTerms = [...cachedResult.terms];
+      
+      // Add any database terms that aren't already in the cached result
+      for (const dbTerm of existingTerms) {
+        if (!cachedTermsSet.has(dbTerm.term.toLowerCase())) {
+          combinedTerms.push(dbTerm);
+          cachedTermsSet.add(dbTerm.term.toLowerCase());
+        }
+      }
+      
+      // Check if we need to call the API for any missing terms
+      const missingTerms = keyTerms.filter(term => 
+        !cachedTermsSet.has(term) && !cachedTermsSet.has(term.toLowerCase())
+      );
+      
+      // If there are no missing terms or we don't have an API key, return the combined results
+      if (missingTerms.length === 0 || !CLAUDE_API_KEY) {
+        const augmentedResult = { terms: combinedTerms };
+        await QuizAnalysisCache.saveToCache(fullText, language, augmentedResult);
+        return augmentedResult;
+      }
+      
+      // If we get here, we need to call the API for the missing terms
+      console.log('Calling API for missing terms:', missingTerms);
+      try {
+        const apiResult = await callClaudeAPIForTerms(fullText, missingTerms, language);
+        if (apiResult && apiResult.terms) {
+          // Add the new terms to our result and save to database
+          for (const term of apiResult.terms) {
+            if (!cachedTermsSet.has(term.term.toLowerCase())) {
+              combinedTerms.push(term);
+              cachedTermsSet.add(term.term.toLowerCase());
+              
+              // Save to database
+              if (term.term && term.explanation) {
+                await GlobalTermsDatabase.addTerm(term.term, term.explanation);
+              }
+              
+              if (term.term && term.translation) {
+                await GlobalTermsDatabase.addTranslation(term.term, language, term.translation);
+              }
+            }
+          }
+        }
+        
+        const finalResult = { terms: combinedTerms };
+        await QuizAnalysisCache.saveToCache(fullText, language, finalResult);
+        return finalResult;
+      } catch (error) {
+        console.error('Error calling API for missing terms:', error);
+        // Return what we have so far
+        return { terms: combinedTerms };
+      }
+    }
+    
+    // If we don't have cached results, continue with normal flow
     // If we found terms in our database and they all have translations,
-    // return them without calling Claude API
+    // save to cache and return them without calling Claude API
     const allHaveTranslations = existingTerms.every(term => !!term.translation);
-    if (existingTerms.length > 0 && allHaveTranslations) {
+    const allTermsCovered = keyTerms.every(term => 
+      existingTerms.some(dbTerm => 
+        dbTerm.term.toLowerCase() === term.toLowerCase()
+      )
+    );
+    
+    if (existingTerms.length > 0 && allHaveTranslations && allTermsCovered) {
       console.log('Using terms from global database:', existingTerms.length);
-      return { terms: existingTerms };
+      const result = { terms: existingTerms };
+      // Store in cache
+      await QuizAnalysisCache.saveToCache(fullText, language, result);
+      return result;
     }
 
     // Check if API key is available
     if (!CLAUDE_API_KEY) {
       console.error('Claude API key is not set in environment variables');
-      return getFallbackAnalysis(questionText, language);
+      const fallbackResult = getFallbackAnalysis(fullText, language);
+      await QuizAnalysisCache.saveToCache(fullText, language, fallbackResult);
+      return fallbackResult;
     }
 
-    console.log('Analyzing question with Claude API...');
+    console.log('Analyzing question and options with Claude API...');
     
-    // Create the prompt for Claude
+    // Create the prompt for Claude with specific instructions for key citizenship terms
     const prompt = `
-You are helping non-English speakers prepare for the Australian citizenship test.
+You are helping non-native English speakers prepare for the Australian citizenship test.
 
-Analyze the following question from the Australian citizenship test:
-"${questionText}"
+Analyze this question and its answer options:
 
-Please identify any potentially complicated words, terms, phrases, or concepts that might be difficult for non-native English speakers to understand.
+Question: "${questionText}"
 
-For each identified term:
-1. Provide a clear, simple explanation in English
-2. Provide a translation into ${language}
+Options:
+${options.map((option, index) => `${index + 1}. ${option}`).join('\n')}
+
+Please identify ALL important terms that might be difficult for someone learning English, including:
+1. Key words related to Australian citizenship, governance, history, culture, or values
+2. Words or phrases from the Australian national anthem or other national symbols
+3. Any proper nouns, specialized terms, or words that might be unfamiliar to non-native English speakers
+4. Do not skip any potentially difficult words, even if they seem basic to native speakers
+
+For EACH identified term:
+1. Provide a clear, simple explanation in English (focus on the Australian context when relevant)
+2. Provide a translation in ${language}
+
+The following specific terms MUST be included if they appear in the text:
+- national anthem
+- southern cross
+- young and free
+- let us rejoice 
+- beneath
+- radiant
+- sentence
+- australians all
 
 Return ONLY a JSON object with this structure:
 {
@@ -104,20 +341,110 @@ Return ONLY a JSON object with this structure:
         }
         
         // Combine any existing terms from database with new ones from Claude
-        return mergeDatabaseAndClaudeResults(existingTerms, result.terms);
+        const mergedResult = mergeDatabaseAndClaudeResults(existingTerms, result.terms);
+        
+        // Store in cache for future use
+        await QuizAnalysisCache.saveToCache(fullText, language, mergedResult);
+        
+        return mergedResult;
       }
     } catch (parseError) {
       console.error('Error parsing Claude response:', parseError);
     }
 
     // If we get here, we couldn't parse the result
-    const fallbackResult = getFallbackAnalysis(questionText, language);
+    const fallbackResult = getFallbackAnalysis(fullText, language);
+    await QuizAnalysisCache.saveToCache(fullText, language, fallbackResult);
     return fallbackResult;
   } catch (error) {
     console.error('Error calling Claude API:', error);
-    return getFallbackAnalysis(questionText, language);
+    const fallbackResult = getFallbackAnalysis(questionText + ' ' + options.join(' '), language);
+    await QuizAnalysisCache.saveToCache(questionText + ' ' + options.join(' '), language, fallbackResult);
+    return fallbackResult;
   }
 };
+
+/**
+ * Call Claude API specifically for a set of terms that need definitions and translations
+ * @param {string} text - The full text context 
+ * @param {string[]} terms - The specific terms to get definitions and translations for
+ * @param {string} language - The target language code
+ * @returns {Promise<Object>} - Object containing terms with explanations and translations
+ */
+async function callClaudeAPIForTerms(text, terms, language) {
+  if (!terms || terms.length === 0) {
+    return { terms: [] };
+  }
+  
+  console.log('Calling Claude API for specific terms:', terms);
+  
+  const prompt = `
+You are helping non-native English speakers prepare for the Australian citizenship test.
+
+Here is the context text:
+"${text}"
+
+I need you to provide definitions and translations for these specific terms from the text:
+${terms.map(term => `- ${term}`).join('\n')}
+
+For EACH term:
+1. Provide a clear, simple explanation in English (focus on the Australian context when relevant)
+2. Provide a translation in ${language}
+
+Return ONLY a JSON object with this structure:
+{
+  "terms": [
+    {
+      "term": "term from the list",
+      "explanation": "simple explanation in English",
+      "translation": "translation in ${language}"
+    },
+    ...
+  ]
+}
+`;
+
+  // Call Claude API
+  try {
+    const response = await axios.post(
+      'https://api.anthropic.com/v1/messages',
+      {
+        model: "claude-3-opus-20240229",
+        max_tokens: 2000,
+        messages: [
+          {
+            role: "user",
+            content: prompt
+          }
+        ]
+      },
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': CLAUDE_API_KEY,
+          'anthropic-version': '2023-06-01'
+        }
+      }
+    );
+    
+    console.log('Claude API response received for specific terms');
+    
+    // Parse the response
+    const content = response.data.content[0].text;
+    
+    // Parse the JSON from Claude's response
+    const jsonMatch = content.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      const jsonStr = jsonMatch[0];
+      return JSON.parse(jsonStr);
+    }
+    
+    return { terms: [] };
+  } catch (error) {
+    console.error('Error calling Claude API for specific terms:', error);
+    return { terms: [] };
+  }
+}
 
 /**
  * Analyzes a question and its options with Claude API
@@ -136,26 +463,41 @@ export const analyzeQuestionAndOptions = async (questionText, options, language)
     // Create a composite text for analysis
     const fullText = `${questionText} ${options.join(' ')}`;
     
-    // First, check the global database for any existing terms
-    const existingTerms = GlobalTermsDatabase.analyzeText(fullText, language);
+    // Check cache first
+    const cachedResult = await QuizAnalysisCache.getFromCache(fullText, language);
+    if (cachedResult) {
+      console.log('Using cached analysis result');
+      return cachedResult;
+    }
+    
+    // Identify key terms from the question and options
+    const keyTerms = identifyKeyTerms(fullText);
+    
+    // Check the global database for any existing terms
+    const existingTerms = GlobalTermsDatabase.analyzeText(fullText, language, keyTerms);
     
     // If we found terms in our database and they all have translations,
-    // return them without calling Claude API
+    // save to cache and return them without calling Claude API
     const allHaveTranslations = existingTerms.every(term => !!term.translation);
     if (existingTerms.length > 0 && allHaveTranslations) {
       console.log('Using terms from global database:', existingTerms.length);
-      return { terms: existingTerms };
+      const result = { terms: existingTerms };
+      // Store in cache
+      await QuizAnalysisCache.saveToCache(fullText, language, result);
+      return result;
     }
 
     // Check if API key is available
     if (!CLAUDE_API_KEY) {
       console.error('Claude API key is not set in environment variables');
-      return getFallbackAnalysis(fullText, language);
+      const fallbackResult = getFallbackAnalysis(fullText, language);
+      await QuizAnalysisCache.saveToCache(fullText, language, fallbackResult);
+      return fallbackResult;
     }
 
     console.log('Analyzing question and options with Claude API...');
     
-    // Create the prompt for Claude
+    // Create the prompt for Claude with specific instructions for key citizenship terms
     const prompt = `
 You are helping non-native English speakers prepare for the Australian citizenship test.
 
@@ -166,13 +508,19 @@ Question: "${questionText}"
 Options:
 ${options.map((option, index) => `${index + 1}. ${option}`).join('\n')}
 
-Identify any words, terms, or phrases that might be difficult for someone learning English. 
-Focus only on important words related to Australian citizenship, government, history, or culture.
-Do not include basic English words.
+Identify important terms related to Australian citizenship, governance, history, culture, or values that might be difficult for someone learning English.
 
 For each identified term:
-1. Provide a clear, simple explanation in English
+1. Provide a clear, simple explanation in English (focus on the Australian context)
 2. Provide a translation in ${language}
+
+Focus on these types of terms:
+- Historical events, dates, periods (like Anzac Day, Federation)
+- Place names (like Gallipoli)
+- People's names and titles
+- Political and legal concepts (parliament, democracy)
+- Cultural practices, symbols, and values
+- Government institutions and roles
 
 Return ONLY a JSON object with this structure:
 {
@@ -226,7 +574,12 @@ Return ONLY a JSON object with this structure:
         }
         
         // Combine any existing terms from database with new ones from Claude
-        return mergeDatabaseAndClaudeResults(existingTerms, result.terms);
+        const mergedResult = mergeDatabaseAndClaudeResults(existingTerms, result.terms);
+        
+        // Store in cache for future use
+        await QuizAnalysisCache.saveToCache(fullText, language, mergedResult);
+        
+        return mergedResult;
       }
     } catch (parseError) {
       console.error('Error parsing Claude response:', parseError);
@@ -234,10 +587,13 @@ Return ONLY a JSON object with this structure:
 
     // If we get here, we couldn't parse the result
     const fallbackResult = getFallbackAnalysis(fullText, language);
+    await QuizAnalysisCache.saveToCache(fullText, language, fallbackResult);
     return fallbackResult;
   } catch (error) {
     console.error('Error calling Claude API:', error);
-    return getFallbackAnalysis(questionText + ' ' + options.join(' '), language);
+    const fallbackResult = getFallbackAnalysis(questionText + ' ' + options.join(' '), language);
+    await QuizAnalysisCache.saveToCache(questionText + ' ' + options.join(' '), language, fallbackResult);
+    return fallbackResult;
   }
 };
 
@@ -298,7 +654,7 @@ const mergeDatabaseAndClaudeResults = (dbTerms, claudeTerms) => {
   return { terms: Array.from(termsMap.values()) };
 };
 
-// Enhanced fallback terms for offline use
+// Enhanced fallback terms for offline use - extended list
 const fallbackTerms = {
   "democracy": {
     explanation: "A system of government where people choose their leaders by voting",
@@ -328,48 +684,57 @@ const fallbackTerms = {
       "fr": "citoyenneté"
     }
   },
-  "constitution": {
-    explanation: "The set of basic laws that defines how a country is governed",
+  "anzac day": {
+    explanation: "A national day of remembrance in Australia and New Zealand that commemorates those who served and died in wars and conflicts",
     translations: {
-      "zh-CN": "宪法",
-      "zh-TW": "憲法",
-      "ar": "الدستور",
-      "pa": "ਸੰਵਿਧਾਨ",
-      "hi": "संविधान",
-      "fil": "konstitusyon",
-      "vi": "hiến pháp",
-      "es": "constitución",
-      "fr": "constitution"
+      "zh-CN": "澳新军团日",
+      "zh-TW": "澳紐軍團日",
+      "ar": "يوم أنزاك",
+      "es": "Día de Anzac",
+      "fr": "Jour d'Anzac"
     }
   },
-  "parliament": {
-    explanation: "The group of elected people who make the laws in a country",
+  "gallipoli": {
+    explanation: "A peninsula in Turkey where Australian and New Zealand forces landed during World War I",
     translations: {
-      "zh-CN": "议会",
-      "zh-TW": "議會",
-      "ar": "البرلمان",
-      "pa": "ਸੰਸਦ",
-      "hi": "संसद",
-      "fil": "parlamento",
-      "vi": "quốc hội",
-      "es": "parlamento",
-      "fr": "parlement"
+      "zh-CN": "加利波利",
+      "zh-TW": "加利波利",
+      "ar": "غاليبولي",
+      "es": "Galípoli",
+      "fr": "Gallipoli"
     }
   },
-  "referendum": {
-    explanation: "A direct vote by all citizens on an important issue or law",
+  "landing": {
+    explanation: "The act of coming to shore from a boat or ship",
     translations: {
-      "zh-CN": "公民投票",
-      "zh-TW": "公民投票",
-      "ar": "استفتاء",
-      "pa": "ਜਨਮਤ ਸੰਗ੍ਰਹਿ",
-      "hi": "जनमत संग्रह",
-      "fil": "reperendum",
-      "vi": "trưng cầu dân ý",
-      "es": "referéndum",
-      "fr": "référendum"
+      "zh-CN": "登陆",
+      "zh-TW": "登陸",
+      "ar": "هبوط",
+      "es": "desembarco",
+      "fr": "débarquement"
     }
-  }
+  },
+  "settlers": {
+    explanation: "People who move to a new place to live permanently",
+    translations: {
+      "zh-CN": "定居者",
+      "zh-TW": "定居者",
+      "ar": "المستوطنون",
+      "es": "colonos",
+      "fr": "colons"
+    }
+  },
+  "federation": {
+    explanation: "The process of forming Australia as a nation by uniting separate colonies",
+    translations: {
+      "zh-CN": "联邦制",
+      "zh-TW": "聯邦制",
+      "ar": "اتحاد",
+      "es": "federación",
+      "fr": "fédération"
+    }
+  },
+  // Add more entries as needed...
 };
 
 // Import fallback terms into the global database on initialization
@@ -381,7 +746,8 @@ const fallbackTerms = {
 // Fallback function to use when Claude API is unavailable
 export const getFallbackAnalysis = (text, language = 'en') => {
   // First check the global database
-  const databaseTerms = GlobalTermsDatabase.analyzeText(text, language);
+  const keyTerms = identifyKeyTerms(text);
+  const databaseTerms = GlobalTermsDatabase.analyzeText(text, language, keyTerms);
   
   // If we have terms from the database, use those
   if (databaseTerms.length > 0) {
@@ -411,5 +777,6 @@ export const getFallbackAnalysis = (text, language = 'en') => {
 export default {
   analyzeQuestion,
   analyzeQuestionAndOptions,
-  getFallbackAnalysis
+  getFallbackAnalysis,
+  identifyKeyTerms // Export for testing
 };

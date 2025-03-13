@@ -1,9 +1,11 @@
 // src/utils/GlobalTermsDatabase.js
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import keywords from '../data/keywords.json';
 
 // Storage keys for the global database
 const GLOBAL_TERMS_KEY = '@global_terms_db';
 const GLOBAL_TRANSLATIONS_KEY = '@global_translations_db';
+const LAST_UPDATE_KEY = '@global_terms_last_update';
 
 /**
  * Manages a global database of terms and their translations that
@@ -12,17 +14,27 @@ const GLOBAL_TRANSLATIONS_KEY = '@global_translations_db';
 class GlobalTermsDatabase {
   /**
    * Initialize the database
-   * Loads terms and translations from AsyncStorage
+   * Loads terms and translations from AsyncStorage and imports from keywords.json
    */
   static async init() {
     try {
       // Try to load existing database
       const termsData = await AsyncStorage.getItem(GLOBAL_TERMS_KEY);
       const translationsData = await AsyncStorage.getItem(GLOBAL_TRANSLATIONS_KEY);
+      const lastUpdateData = await AsyncStorage.getItem(LAST_UPDATE_KEY);
       
       // Create default structures if not exists
       this.terms = termsData ? JSON.parse(termsData) : {};
       this.translations = translationsData ? JSON.parse(translationsData) : {};
+      this.lastUpdate = lastUpdateData ? JSON.parse(lastUpdateData) : 0;
+      
+      // Import keywords.json data if database is empty or it's been a while
+      const shouldImport = Object.keys(this.terms).length === 0 || 
+                           (Date.now() - this.lastUpdate > 7 * 24 * 60 * 60 * 1000); // 7 days
+      
+      if (shouldImport) {
+        await this.importFromKeywordsJson();
+      }
       
       console.log(`Global terms database initialized with ${Object.keys(this.terms).length} terms`);
       console.log(`Global translations database initialized with translations for ${Object.keys(this.translations).length} languages`);
@@ -33,7 +45,58 @@ class GlobalTermsDatabase {
       // Initialize with empty objects if there's an error
       this.terms = {};
       this.translations = {};
+      this.lastUpdate = 0;
       return false;
+    }
+  }
+
+  /**
+   * Import terms and translations from keywords.json
+   */
+  static async importFromKeywordsJson() {
+    try {
+      if (!Array.isArray(keywords) || keywords.length === 0) {
+        console.log('No keywords found in keywords.json');
+        return;
+      }
+      
+      console.log(`Importing ${keywords.length} terms from keywords.json`);
+      let importCount = 0;
+      
+      for (const keywordEntry of keywords) {
+        // Handle both object format and string format
+        if (typeof keywordEntry === 'string') {
+          // Just add the term without definition
+          this.terms[keywordEntry.toLowerCase()] = `A key term in Australian citizenship test`;
+          importCount++;
+        } else if (keywordEntry && keywordEntry.word && keywordEntry.definition) {
+          // Add term with definition
+          this.terms[keywordEntry.word.toLowerCase()] = keywordEntry.definition;
+          
+          // Add translations
+          if (keywordEntry.translations) {
+            for (const [language, translation] of Object.entries(keywordEntry.translations)) {
+              if (!this.translations[language]) {
+                this.translations[language] = {};
+              }
+              this.translations[language][keywordEntry.word.toLowerCase()] = translation;
+            }
+          }
+          
+          importCount++;
+        }
+      }
+      
+      // Update lastUpdate timestamp
+      this.lastUpdate = Date.now();
+      await AsyncStorage.setItem(LAST_UPDATE_KEY, JSON.stringify(this.lastUpdate));
+      
+      // Save the imported data
+      await this.save();
+      
+      console.log(`Imported ${importCount} terms from keywords.json`);
+    } catch (error) {
+      console.error('Error importing from keywords.json:', error);
     }
   }
 
@@ -150,30 +213,152 @@ class GlobalTermsDatabase {
   }
 
   /**
-   * Add multiple terms and translations at once
-   * @param {Array} termsData - Array of {term, explanation, language, translation} objects
-   * @returns {Promise<number>} - Number of terms added
-   */
-  static async addMultiple(termsData) {
-    if (!Array.isArray(termsData)) return 0;
-    
-    let addedCount = 0;
-    
-    for (const item of termsData) {
-      const { term, explanation, language, translation } = item;
+ * Find all terms in the text that exist in our database or match suggested terms
+ * Enhanced to be more thorough in finding matching terms
+ * 
+ * @param {string} text - The text to analyze
+ * @param {string} language - The target language code
+ * @param {string[]} [suggestedTerms] - Suggested terms to prioritize checking
+ * @returns {Array} - Array of found terms with explanations and translations
+ */
+static analyzeText(text, language, suggestedTerms = []) {
+  if (!text) return [];
+  
+  const foundTerms = [];
+  const normalizedText = text.toLowerCase();
+  const processedTerms = new Set(); // Track which terms we've already processed
+  
+  // First check suggested terms if provided
+  if (Array.isArray(suggestedTerms) && suggestedTerms.length > 0) {
+    for (const term of suggestedTerms) {
+      const normalizedTerm = term.toLowerCase().trim();
       
-      if (term && explanation) {
-        const termAdded = await this.addTerm(term, explanation);
-        if (termAdded) addedCount++;
-      }
+      // Skip if we've already processed this term
+      if (processedTerms.has(normalizedTerm)) continue;
       
-      if (term && language && translation) {
-        await this.addTranslation(term, language, translation);
+      // Check if the term exists in our database
+      if (this.terms[normalizedTerm]) {
+        // Check if the term is in the text
+        if (normalizedText.includes(normalizedTerm)) {
+          const foundTerm = {
+            term: normalizedTerm,
+            explanation: this.terms[normalizedTerm],
+            translation: this.translations[language]?.[normalizedTerm] || null
+          };
+          foundTerms.push(foundTerm);
+          processedTerms.add(normalizedTerm);
+        }
       }
     }
-    
-    return addedCount;
   }
+  
+  // Check for exact word matches using word boundary regex
+  const allTerms = Object.keys(this.terms);
+  
+  // Sort terms by length (longest first) to handle cases where one term is part of another
+  allTerms.sort((a, b) => b.length - a.length);
+  
+  for (const term of allTerms) {
+    // Skip if we've already found this term
+    if (processedTerms.has(term.toLowerCase())) {
+      continue;
+    }
+    
+    // Use word boundary regex to find whole word matches
+    const regex = new RegExp(`\\b${term}\\b`, 'i');
+    if (regex.test(text)) {
+      const foundTerm = {
+        term: term,
+        explanation: this.terms[term],
+        translation: this.translations[language]?.[term] || null
+      };
+      
+      foundTerms.push(foundTerm);
+      processedTerms.add(term.toLowerCase());
+    }
+  }
+  
+  // Check for multi-word terms that might not have proper word boundaries
+  const multiWordTerms = allTerms.filter(term => term.includes(' '));
+  for (const term of multiWordTerms) {
+    // Skip if we've already found this term
+    if (processedTerms.has(term.toLowerCase())) {
+      continue;
+    }
+    
+    if (normalizedText.includes(term.toLowerCase())) {
+      const foundTerm = {
+        term: term,
+        explanation: this.terms[term],
+        translation: this.translations[language]?.[term] || null
+      };
+      
+      foundTerms.push(foundTerm);
+      processedTerms.add(term.toLowerCase());
+    }
+  }
+  
+  // Special handling for national anthem terms
+  const anthemTerms = [
+    'australians all', 'let us rejoice', 'young and free', 'golden soil',
+    'wealth for toil', 'national anthem', 'southern cross', 'commonwealth of australia',
+    'beneath our radiant', 'advance australia fair'
+  ];
+  
+  for (const term of anthemTerms) {
+    // Skip if we've already found this term
+    if (processedTerms.has(term.toLowerCase())) {
+      continue;
+    }
+    
+    if (normalizedText.includes(term.toLowerCase())) {
+      // If we don't have this term in our database, create a basic entry for it
+      const explanation = this.terms[term] || 
+        `A phrase from Australia's national anthem, "Advance Australia Fair"`;
+      
+      const foundTerm = {
+        term: term,
+        explanation: explanation,
+        translation: this.translations[language]?.[term] || null
+      };
+      
+      foundTerms.push(foundTerm);
+      processedTerms.add(term.toLowerCase());
+    }
+  }
+  
+  // Finally, check for important individual words related to the anthem
+  const importantWords = [
+    'anthem', 'rejoice', 'beneath', 'radiant', 'girt', 'soil', 'wealth',
+    'toil', 'commonwealth', 'progress', 'fair', 'girdle', 'sea'
+  ];
+  
+  for (const word of importantWords) {
+    // Skip if we've already found this term
+    if (processedTerms.has(word.toLowerCase())) {
+      continue;
+    }
+    
+    // Check for word boundary match
+    const regex = new RegExp(`\\b${word}\\b`, 'i');
+    if (regex.test(text)) {
+      // If we don't have this term in our database, create a basic entry for it
+      const explanation = this.terms[word] || 
+        `A word used in Australia's national anthem, "Advance Australia Fair"`;
+      
+      const foundTerm = {
+        term: word,
+        explanation: explanation,
+        translation: this.translations[language]?.[word] || null
+      };
+      
+      foundTerms.push(foundTerm);
+      processedTerms.add(word.toLowerCase());
+    }
+  }
+  
+  return foundTerms;
+}
 
   /**
    * Get all stored terms and their explanations
@@ -193,34 +378,30 @@ class GlobalTermsDatabase {
   }
 
   /**
-   * Analyze text to find terms that are in our database
-   * @param {string} text - The text to analyze
-   * @param {string} language - The target language for translations
-   * @returns {Array} - Array of found terms with explanations and translations
+   * Get database statistics
+   * @returns {Object} - Statistics about the database
    */
-  static analyzeText(text, language) {
-    if (!text) return [];
+  static getStats() {
+    const totalTerms = Object.keys(this.terms).length;
+    const languages = Object.keys(this.translations);
     
-    const foundTerms = [];
-    const words = text.split(/\s+/);
-    const termsList = Object.keys(this.terms);
+    const languageStats = languages.map(lang => {
+      const translations = Object.keys(this.translations[lang] || {}).length;
+      const coverage = totalTerms > 0 ? (translations / totalTerms) * 100 : 0;
+      
+      return {
+        code: lang,
+        count: translations,
+        coverage: Math.round(coverage)
+      };
+    });
     
-    // Simple word matching - could be improved with more sophisticated NLP
-    for (const term of termsList) {
-      // Check if the term is in the text (case insensitive)
-      const regex = new RegExp(`\\b${term}\\b`, 'i');
-      if (regex.test(text)) {
-        const foundTerm = {
-          term: term,
-          explanation: this.terms[term],
-          translation: this.translations[language]?.[term] || null
-        };
-        
-        foundTerms.push(foundTerm);
-      }
-    }
-    
-    return foundTerms;
+    return {
+      totalTerms,
+      totalLanguages: languages.length,
+      lastUpdate: this.lastUpdate,
+      languageStats
+    };
   }
 
   /**
@@ -231,8 +412,10 @@ class GlobalTermsDatabase {
     try {
       this.terms = {};
       this.translations = {};
+      this.lastUpdate = 0;
       await AsyncStorage.removeItem(GLOBAL_TERMS_KEY);
       await AsyncStorage.removeItem(GLOBAL_TRANSLATIONS_KEY);
+      await AsyncStorage.removeItem(LAST_UPDATE_KEY);
       console.log('Global terms database cleared');
       return true;
     } catch (error) {
@@ -279,5 +462,6 @@ class GlobalTermsDatabase {
 // Initialize static properties
 GlobalTermsDatabase.terms = {};
 GlobalTermsDatabase.translations = {};
+GlobalTermsDatabase.lastUpdate = 0;
 
 export default GlobalTermsDatabase;

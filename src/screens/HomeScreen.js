@@ -99,6 +99,18 @@ export default function HomeScreen({ navigation }) {
             onPress={() => navigation.navigate('Quiz', { mode: 'practice' })}
             color="#FF2D55"
           />
+          <MenuButton
+            title="Terms Database"
+            icon="🔤"
+            onPress={() => navigation.navigate('DatabaseStatus')}
+            color="#AF52DE"
+          />
+          <MenuButton
+            title="Diagnostics"
+            icon="🔍"
+            onPress={() => navigation.navigate('Diagnostic')}
+            color="#5AC8FA"
+          />
         </View>
 
         {/* Additional Info */}

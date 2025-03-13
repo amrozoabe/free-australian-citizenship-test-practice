@@ -10,6 +10,7 @@ import StatisticsScreen from './src/screens/StatisticsScreen';
 import BookmarksScreen from './src/screens/BookmarksScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 import DatabaseStatusScreen from './src/screens/DatabaseStatusScreen';
+import DiagnosticScreen from './src/screens/DiagnosticScreen';
 import AppInitializer from './src/utils/AppInitializer';
 import { View, Text, ActivityIndicator } from 'react-native';
 
@@ -66,6 +67,7 @@ export default function App() {
           <Stack.Screen name="Bookmarks" component={BookmarksScreen} />
           <Stack.Screen name="Settings" component={SettingsScreen} />
           <Stack.Screen name="DatabaseStatus" component={DatabaseStatusScreen} />
+          <Stack.Screen name="Diagnostic" component={DiagnosticScreen} />
         </Stack.Navigator>
       </NavigationContainer>
     </QuizProvider>
