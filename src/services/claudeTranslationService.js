@@ -7,8 +7,6 @@ import QuizAnalysisCache from '../utils/QuizAnalysisCache';
 // Initialize the database when the service is first imported
 GlobalTermsDatabase.init();
 
-// Enhanced identifyKeyTerms function for Claude Translation Service
-
 /**
  * Improved method to identify key citizenship terms from text
  * Uses a more comprehensive pattern matching approach
@@ -124,8 +122,6 @@ const commonWords = new Set([
   'than', 'them', 'then', 'its', 'our', 'we', 'were'
 ]);
 
-export default identifyKeyTerms;
-
 /**
  * Analyzes a question and its options with Claude API
  * Uses the global database first, then calls Claude if needed
@@ -136,7 +132,7 @@ export default identifyKeyTerms;
  * @param {string} language - The target language code
  * @returns {Promise<Object>} - Object containing terms, explanations and translations
  */
-export const analyzeQuestionAndOptions = async (questionText, options, language) => {
+const analyzeQuestionAndOptions = async (questionText, options, language) => {
   try {
     if (!questionText || !options || !language) {
       return { terms: [] };
@@ -447,157 +443,6 @@ Return ONLY a JSON object with this structure:
 }
 
 /**
- * Analyzes a question and its options with Claude API
- * Uses the global database first, then calls Claude if needed
- * @param {string} questionText - The question text
- * @param {string[]} options - The answer options
- * @param {string} language - The target language code
- * @returns {Promise<Object>} - Object containing terms, explanations and translations
- */
-export const analyzeQuestionAndOptions = async (questionText, options, language) => {
-  try {
-    if (!questionText || !options || !language) {
-      return { terms: [] };
-    }
-
-    // Create a composite text for analysis
-    const fullText = `${questionText} ${options.join(' ')}`;
-    
-    // Check cache first
-    const cachedResult = await QuizAnalysisCache.getFromCache(fullText, language);
-    if (cachedResult) {
-      console.log('Using cached analysis result');
-      return cachedResult;
-    }
-    
-    // Identify key terms from the question and options
-    const keyTerms = identifyKeyTerms(fullText);
-    
-    // Check the global database for any existing terms
-    const existingTerms = GlobalTermsDatabase.analyzeText(fullText, language, keyTerms);
-    
-    // If we found terms in our database and they all have translations,
-    // save to cache and return them without calling Claude API
-    const allHaveTranslations = existingTerms.every(term => !!term.translation);
-    if (existingTerms.length > 0 && allHaveTranslations) {
-      console.log('Using terms from global database:', existingTerms.length);
-      const result = { terms: existingTerms };
-      // Store in cache
-      await QuizAnalysisCache.saveToCache(fullText, language, result);
-      return result;
-    }
-
-    // Check if API key is available
-    if (!CLAUDE_API_KEY) {
-      console.error('Claude API key is not set in environment variables');
-      const fallbackResult = getFallbackAnalysis(fullText, language);
-      await QuizAnalysisCache.saveToCache(fullText, language, fallbackResult);
-      return fallbackResult;
-    }
-
-    console.log('Analyzing question and options with Claude API...');
-    
-    // Create the prompt for Claude with specific instructions for key citizenship terms
-    const prompt = `
-You are helping non-native English speakers prepare for the Australian citizenship test.
-
-Analyze this question and its answer options:
-
-Question: "${questionText}"
-
-Options:
-${options.map((option, index) => `${index + 1}. ${option}`).join('\n')}
-
-Identify important terms related to Australian citizenship, governance, history, culture, or values that might be difficult for someone learning English.
-
-For each identified term:
-1. Provide a clear, simple explanation in English (focus on the Australian context)
-2. Provide a translation in ${language}
-
-Focus on these types of terms:
-- Historical events, dates, periods (like Anzac Day, Federation)
-- Place names (like Gallipoli)
-- People's names and titles
-- Political and legal concepts (parliament, democracy)
-- Cultural practices, symbols, and values
-- Government institutions and roles
-
-Return ONLY a JSON object with this structure:
-{
-  "terms": [
-    {
-      "term": "identified term",
-      "explanation": "simple explanation in English",
-      "translation": "translation in ${language}"
-    },
-    ...
-  ]
-}
-`;
-
-    // Call Claude API
-    const response = await axios.post(
-      'https://api.anthropic.com/v1/messages',
-      {
-        model: "claude-3-opus-20240229",
-        max_tokens: 2000,
-        messages: [
-          {
-            role: "user",
-            content: prompt
-          }
-        ]
-      },
-      {
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': CLAUDE_API_KEY,
-          'anthropic-version': '2023-06-01'
-        }
-      }
-    );
-    
-    console.log('Claude API response received');
-    
-    // Parse the response
-    const content = response.data.content[0].text;
-    try {
-      // Parse the JSON from Claude's response
-      const jsonMatch = content.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        const jsonStr = jsonMatch[0];
-        const result = JSON.parse(jsonStr);
-        
-        // Save these terms to the global database for future use
-        if (result.terms && Array.isArray(result.terms)) {
-          await saveTermsToGlobalDatabase(result.terms, language);
-        }
-        
-        // Combine any existing terms from database with new ones from Claude
-        const mergedResult = mergeDatabaseAndClaudeResults(existingTerms, result.terms);
-        
-        // Store in cache for future use
-        await QuizAnalysisCache.saveToCache(fullText, language, mergedResult);
-        
-        return mergedResult;
-      }
-    } catch (parseError) {
-      console.error('Error parsing Claude response:', parseError);
-    }
-
-    // If we get here, we couldn't parse the result
-    const fallbackResult = getFallbackAnalysis(fullText, language);
-    await QuizAnalysisCache.saveToCache(fullText, language, fallbackResult);
-    return fallbackResult;
-  } catch (error) {
-    console.error('Error calling Claude API:', error);
-    const fallbackResult = getFallbackAnalysis(questionText + ' ' + options.join(' '), language);
-    await QuizAnalysisCache.saveToCache(questionText + ' ' + options.join(' '), language, fallbackResult);
-    return fallbackResult;
-  }
-};
-
-/**
  * Save terms and translations to the global database
  * @param {Array} terms - Array of term objects
  * @param {string} language - The language code
@@ -744,7 +589,7 @@ const fallbackTerms = {
 })();
 
 // Fallback function to use when Claude API is unavailable
-export const getFallbackAnalysis = (text, language = 'en') => {
+const getFallbackAnalysis = (text, language = 'en') => {
   // First check the global database
   const keyTerms = identifyKeyTerms(text);
   const databaseTerms = GlobalTermsDatabase.analyzeText(text, language, keyTerms);
@@ -774,9 +619,11 @@ export const getFallbackAnalysis = (text, language = 'en') => {
   return { terms };
 };
 
+// Export the service functions
+export { identifyKeyTerms, analyzeQuestionAndOptions, getFallbackAnalysis };
+
 export default {
-  analyzeQuestion,
+  identifyKeyTerms,
   analyzeQuestionAndOptions,
-  getFallbackAnalysis,
-  identifyKeyTerms // Export for testing
+  getFallbackAnalysis
 };

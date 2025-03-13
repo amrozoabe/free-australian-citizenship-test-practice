@@ -1,6 +1,7 @@
-// src/utils/AppInitializer.js
+// src/utils/AppInitializer.js - Enhanced version
 import GlobalTermsDatabase from './GlobalTermsDatabase';
 import QuizAnalysisCache from './QuizAnalysisCache';
+import ApiKeyValidator from './apiKeyValidator';
 
 /**
  * Handles initialization tasks for the app
@@ -8,6 +9,12 @@ import QuizAnalysisCache from './QuizAnalysisCache';
  */
 class AppInitializer {
   static initialized = false;
+  static initializationStatus = {
+    database: false,
+    cache: false,
+    terms: false,
+    api: false
+  };
 
   /**
    * Initialize all required app components
@@ -22,17 +29,25 @@ class AppInitializer {
     try {
       console.log('Initializing app...');
       
+      // Check API key status
+      const apiStatus = ApiKeyValidator.getClaudeApiStatus();
+      console.log('API Status:', apiStatus.message);
+      this.initializationStatus.api = apiStatus.canUse;
+      
       // Initialize the global terms database
       await GlobalTermsDatabase.init();
+      this.initializationStatus.database = true;
       
       // Preload important terms for offline use
       await this.preloadEssentialTerms();
+      this.initializationStatus.terms = true;
       
       // Initialize the cache system
       await QuizAnalysisCache.init();
       
       // Clean any expired cache entries
       await QuizAnalysisCache.cleanExpiredEntries();
+      this.initializationStatus.cache = true;
       
       // Mark as initialized
       this.initialized = true;
@@ -51,10 +66,43 @@ class AppInitializer {
   static async preloadEssentialTerms() {
     try {
       // Preload national anthem terms
-      const anthemTermsCount = await GlobalTermsDatabase.preloadAnthemTerms();
-      console.log(`Preloaded ${anthemTermsCount} national anthem terms`);
+      const anthemTerms = {
+        "national anthem": {
+          explanation: "A patriotic song officially adopted by a country as an expression of national identity",
+          translations: {
+            "zh-CN": "国歌",
+            "zh-TW": "國歌",
+            "ar": "النشيد الوطني",
+            "es": "himno nacional",
+            "fr": "hymne national"
+          }
+        },
+        "advance australia fair": {
+          explanation: "The national anthem of Australia since 1984",
+          translations: {
+            "zh-CN": "澳大利亚前进",
+            "zh-TW": "澳大利亞前進",
+            "ar": "تقدم أستراليا العادلة",
+            "es": "Avanza Australia Justa",
+            "fr": "Avance Australie Équitable"
+          }
+        },
+        "southern cross": {
+          explanation: "A constellation visible in the Southern Hemisphere, featured on the Australian flag",
+          translations: {
+            "zh-CN": "南十字星",
+            "zh-TW": "南十字星",
+            "ar": "الصليب الجنوبي",
+            "es": "Cruz del Sur",
+            "fr": "Croix du Sud"
+          }
+        }
+      };
       
-      // Preload other essential terms (could be extended later)
+      await GlobalTermsDatabase.importPredefinedTerms(anthemTerms);
+      console.log(`Preloaded ${Object.keys(anthemTerms).length} national anthem terms`);
+      
+      // Preload other essential terms
       const essentialTerms = {
         "Australian citizenship": {
           explanation: "The status of being a legal citizen of Australia with full rights and responsibilities",
@@ -87,6 +135,16 @@ class AppInitializer {
             "ru": "тест на гражданство",
             "vi": "bài kiểm tra quốc tịch"
           }
+        },
+        "ANZAC Day": {
+          explanation: "A national day of remembrance in Australia and New Zealand that commemorates those who served and died in wars and conflicts",
+          translations: {
+            "zh-CN": "澳新军团日",
+            "zh-TW": "澳紐軍團日",
+            "ar": "يوم أنزاك",
+            "es": "Día de Anzac",
+            "fr": "Jour d'Anzac"
+          }
         }
       };
       
@@ -95,6 +153,17 @@ class AppInitializer {
     } catch (error) {
       console.error('Error preloading essential terms:', error);
     }
+  }
+
+  /**
+   * Get the current initialization status
+   * @returns {Object} - Status object
+   */
+  static getStatus() {
+    return {
+      initialized: this.initialized,
+      details: { ...this.initializationStatus }
+    };
   }
 
   /**
@@ -117,11 +186,17 @@ class AppInitializer {
       // Clear caches
       await QuizAnalysisCache.clearCache();
       
-      // Clear database
+      // Reset database
       await GlobalTermsDatabase.clearDatabase();
       
-      // Reset initialization flag
+      // Reset initialization flags
       this.initialized = false;
+      this.initializationStatus = {
+        database: false,
+        cache: false,
+        terms: false,
+        api: false
+      };
       
       // Reinitialize
       return await this.initialize();

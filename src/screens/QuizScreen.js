@@ -1,21 +1,14 @@
+// Replace these imports at the top of the file:
 import React, { useState, useEffect } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  TouchableOpacity, 
-  SafeAreaView, 
-  ScrollView,
-  Animated,
-  Vibration,
-  Alert,
-  Modal
-} from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, ScrollView, Animated, Vibration, Alert, Modal } from 'react-native';
 import { useQuiz } from '../contexts/QuizContext';
 import { questions } from '../data/questions';
 import QuestionExplainer from '../components/quiz/QuestionExplainer';
-import claudeService from '../services/claudeTranslationService';
+// Updated imports for the claude service
+import { analyzeQuestionAndOptions, getFallbackAnalysis } from '../services/claudeTranslationService';
 import HelpModal from '../components/quiz/HelpModal';
+// Import the new unified component (once created)
+import UnifiedQuestionText from '../components/quiz/UnifiedQuestionText';
 
 function shuffleOptions(question) {
   const options = [...question.options];
@@ -155,7 +148,8 @@ export default function QuizScreen({ navigation, route }) {
         ? currentQ.question 
         : currentQ.question?.text || '';
       
-      const result = await claudeService.analyzeQuestionAndOptions(
+      // Updated to use the named function instead of the service object
+      const result = await analyzeQuestionAndOptions(
         questionText, 
         currentQ.options, 
         state.settings?.nativeLanguage || 'en'
@@ -173,7 +167,8 @@ export default function QuizScreen({ navigation, route }) {
           ? currentQ.question
           : currentQ.question?.text || '';
         
-        const fallbackResult = claudeService.getFallbackAnalysis(
+        // Updated to use the named function instead of the service object
+        const fallbackResult = getFallbackAnalysis(
           questionText + ' ' + currentQ.options.join(' '),
           state.settings?.nativeLanguage || 'en'
         );
@@ -395,21 +390,25 @@ export default function QuizScreen({ navigation, route }) {
         )}
 
         {/* Question content */}
-        <Animated.View style={{ opacity: fadeAnim }}>
-          <Text style={[
-            styles.questionText,
-            { color: state.settings?.theme === 'dark' ? '#fff' : '#1a1a1a' }
-          ]}>
-            {currentQuestionText}
-          </Text>
+<Animated.View style={{ opacity: fadeAnim }}>
+  {/* Use the new UnifiedQuestionText component */}
+  <UnifiedQuestionText 
+    text={currentQuestionText}
+    keywords={termsAnalysis.map(term => ({ 
+      word: term.term, 
+      definition: term.explanation,
+      translations: { [state.settings?.nativeLanguage || 'en']: term.translation }
+    }))}
+    showDefinitions={false}
+  />
 
-          {/* Help button */}
-          <TouchableOpacity 
-            style={styles.helpButton}
-            onPress={handleHelpPress}
-          >
-            <Text style={styles.helpButtonText}>Need Help? 🔍</Text>
-          </TouchableOpacity>
+  {/* Help button */}
+  <TouchableOpacity 
+    style={styles.helpButton}
+    onPress={handleHelpPress}
+  >
+    <Text style={styles.helpButtonText}>Need Help? 🔍</Text>
+  </TouchableOpacity>
 
           <View style={styles.optionsContainer}>
             {quizQuestions[currentQuestion].options.map((option, index) => (

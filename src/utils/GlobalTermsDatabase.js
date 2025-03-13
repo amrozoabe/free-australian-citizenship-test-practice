@@ -212,7 +212,7 @@ class GlobalTermsDatabase {
     return !!this.translations[language]?.[normalizedTerm];
   }
 
-  /**
+ /**
  * Find all terms in the text that exist in our database or match suggested terms
  * Enhanced to be more thorough in finding matching terms
  * 
@@ -324,36 +324,6 @@ static analyzeText(text, language, suggestedTerms = []) {
       
       foundTerms.push(foundTerm);
       processedTerms.add(term.toLowerCase());
-    }
-  }
-  
-  // Finally, check for important individual words related to the anthem
-  const importantWords = [
-    'anthem', 'rejoice', 'beneath', 'radiant', 'girt', 'soil', 'wealth',
-    'toil', 'commonwealth', 'progress', 'fair', 'girdle', 'sea'
-  ];
-  
-  for (const word of importantWords) {
-    // Skip if we've already found this term
-    if (processedTerms.has(word.toLowerCase())) {
-      continue;
-    }
-    
-    // Check for word boundary match
-    const regex = new RegExp(`\\b${word}\\b`, 'i');
-    if (regex.test(text)) {
-      // If we don't have this term in our database, create a basic entry for it
-      const explanation = this.terms[word] || 
-        `A word used in Australia's national anthem, "Advance Australia Fair"`;
-      
-      const foundTerm = {
-        term: word,
-        explanation: explanation,
-        translation: this.translations[language]?.[word] || null
-      };
-      
-      foundTerms.push(foundTerm);
-      processedTerms.add(word.toLowerCase());
     }
   }
   
