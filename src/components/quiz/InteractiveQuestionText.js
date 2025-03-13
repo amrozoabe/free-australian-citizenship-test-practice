@@ -2,12 +2,30 @@
 import React, { useState, useMemo } from 'react';
 import { View, Text, TouchableOpacity, Animated, StyleSheet } from 'react-native';
 import { useQuiz } from '../../contexts/QuizContext';
-import keywords from '../../data/keywords.json';
+import keywords from '../../data/keywords.json';  // The import path remains the same
 
 const InteractiveQuestionText = ({ questionText = '' }) => {  // Add default empty string
   const [selectedWord, setSelectedWord] = useState(null);
   const { state } = useQuiz();
   const fadeAnim = new Animated.Value(0);
+
+  const handleWordPress = (word, keywordData) => {
+    setSelectedWord(word);
+    
+    // Animate the definition
+    Animated.sequence([
+      Animated.timing(fadeAnim, {
+        toValue: 0,
+        duration: 0,
+        useNativeDriver: true,
+      }),
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
 
   const renderWords = () => {
     if (!questionText) return null;  // Guard clause for empty text
@@ -18,7 +36,18 @@ const InteractiveQuestionText = ({ questionText = '' }) => {  // Add default emp
       if (!word) return null;  // Guard clause for empty word
       
       const cleanWord = word.replace(/[.,!?'"()]/g, '').toLowerCase();
-      const keywordData = keywords.find(k => k?.word?.toLowerCase() === cleanWord);
+      
+      // This change accommodates the new format of keywords.json
+      // It now handles both the old format (array of strings) and the new format (array of objects)
+      const keywordData = Array.isArray(keywords) ? 
+        keywords.find(k => {
+          if (typeof k === 'string') {
+            return k.toLowerCase() === cleanWord;
+          } else if (k && k.word) {
+            return k.word.toLowerCase() === cleanWord;
+          }
+          return false;
+        }) : null;
 
       return (
         <TouchableOpacity
@@ -41,24 +70,40 @@ const InteractiveQuestionText = ({ questionText = '' }) => {  // Add default emp
   const renderDefinition = () => {
     if (!selectedWord) return null;
 
-    const keywordData = keywords.find(
-      k => k.word.toLowerCase() === selectedWord.toLowerCase()
-    );
+    // This change accommodates the new format of keywords.json
+    const keywordData = Array.isArray(keywords) ? 
+      keywords.find(k => {
+        if (typeof k === 'string') {
+          return k.toLowerCase() === selectedWord.toLowerCase();
+        } else if (k && k.word) {
+          return k.word.toLowerCase() === selectedWord.toLowerCase();
+        }
+        return false;
+      }) : null;
 
     if (!keywordData) return null;
+
+    // The definition rendering now handles both the old and new format
+    const definition = typeof keywordData === 'object' ? keywordData.definition : null;
+    const translation = typeof keywordData === 'object' && keywordData.translations ? 
+      keywordData.translations[state.settings.language] : null;
 
     return (
       <Animated.View style={[styles.definitionContainer, { opacity: fadeAnim }]}>
         <Text style={styles.definitionTitle}>Definition</Text>
-        <Text style={styles.definitionText}>{keywordData.definition}</Text>
+        {definition ? (
+          <Text style={styles.definitionText}>{definition}</Text>
+        ) : (
+          <Text style={styles.definitionText}>No definition available</Text>
+        )}
         
-        {keywordData.translations[state.settings.language] && (
+        {translation && (
           <>
             <Text style={styles.translationTitle}>
               Translation ({state.settings.language})
             </Text>
             <Text style={styles.translationText}>
-              {keywordData.translations[state.settings.language]}
+              {translation}
             </Text>
           </>
         )}
@@ -75,55 +120,3 @@ const InteractiveQuestionText = ({ questionText = '' }) => {  // Add default emp
     </View>
   );
 };
-
-const styles = StyleSheet.create({
-  container: {
-    padding: 16,
-  },
-  textContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-  },
-  word: {
-    fontSize: 16,
-    lineHeight: 24,
-  },
-  highlightedWord: {
-    textDecorationLine: 'underline',
-    color: '#2196F3',
-  },
-  selectedWord: {
-    backgroundColor: '#E3F2FD',
-  },
-  definitionContainer: {
-    marginTop: 16,
-    padding: 12,
-    backgroundColor: '#F5F5F5',
-    borderRadius: 8,
-    borderLeftWidth: 4,
-    borderLeftColor: '#2196F3',
-  },
-  definitionTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginBottom: 8,
-  },
-  definitionText: {
-    fontSize: 14,
-    lineHeight: 20,
-    marginBottom: 12,
-  },
-  translationTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginBottom: 8,
-    marginTop: 8,
-  },
-  translationText: {
-    fontSize: 14,
-    lineHeight: 20,
-    fontStyle: 'italic',
-  }
-});
-
-export default InteractiveQuestionText;
