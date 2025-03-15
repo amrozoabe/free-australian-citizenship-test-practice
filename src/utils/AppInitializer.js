@@ -1,19 +1,15 @@
-// src/utils/AppInitializer.js - Enhanced version
+// src/utils/AppInitializer.js - Updated to remove QuizAnalysisCache dependency
 import GlobalTermsDatabase from './GlobalTermsDatabase';
-import QuizAnalysisCache from './QuizAnalysisCache';
-import ApiKeyValidator from './apiKeyValidator';
 
 /**
  * Handles initialization tasks for the app
- * Enhanced with comprehensive term database initialization
+ * Focuses on keyword database initialization
  */
 class AppInitializer {
   static initialized = false;
   static initializationStatus = {
     database: false,
-    cache: false,
-    terms: false,
-    api: false
+    terms: false
   };
 
   /**
@@ -29,11 +25,6 @@ class AppInitializer {
     try {
       console.log('Initializing app...');
       
-      // Check API key status
-      const apiStatus = ApiKeyValidator.getClaudeApiStatus();
-      console.log('API Status:', apiStatus.message);
-      this.initializationStatus.api = apiStatus.canUse;
-      
       // Initialize the global terms database
       await GlobalTermsDatabase.init();
       this.initializationStatus.database = true;
@@ -41,13 +32,6 @@ class AppInitializer {
       // Preload important terms for offline use
       await this.preloadEssentialTerms();
       this.initializationStatus.terms = true;
-      
-      // Initialize the cache system
-      await QuizAnalysisCache.init();
-      
-      // Clean any expired cache entries
-      await QuizAnalysisCache.cleanExpiredEntries();
-      this.initializationStatus.cache = true;
       
       // Mark as initialized
       this.initialized = true;
@@ -183,9 +167,6 @@ class AppInitializer {
     try {
       console.log('Resetting app...');
       
-      // Clear caches
-      await QuizAnalysisCache.clearCache();
-      
       // Reset database
       await GlobalTermsDatabase.clearDatabase();
       
@@ -193,9 +174,7 @@ class AppInitializer {
       this.initialized = false;
       this.initializationStatus = {
         database: false,
-        cache: false,
-        terms: false,
-        api: false
+        terms: false
       };
       
       // Reinitialize

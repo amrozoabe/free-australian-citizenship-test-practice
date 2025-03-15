@@ -1,14 +1,48 @@
-// Replace these imports at the top of the file:
+// Updated QuizScreen.js with keyword-based help instead of Claude API
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, ScrollView, Animated, Vibration, Alert, Modal } from 'react-native';
 import { useQuiz } from '../contexts/QuizContext';
 import { questions } from '../data/questions';
 import QuestionExplainer from '../components/quiz/QuestionExplainer';
-// Updated imports for the claude service
-import { analyzeQuestionAndOptions, getFallbackAnalysis } from '../services/claudeTranslationService';
+// Updated imports for the keyword service
+import { analyzeQuestionAndOptions, getFallbackAnalysis } from '../services/keywordTranslationService';
 import HelpModal from '../components/quiz/HelpModal';
-// Import the new unified component (once created)
+// Import the UnifiedQuestionText component
 import UnifiedQuestionText from '../components/quiz/UnifiedQuestionText';
+import { SUPPORTED_LANGUAGES } from '../constants/languages';
+
+// Define translations for "Need Help?" in different languages
+const HELP_BUTTON_TRANSLATIONS = {
+  'zh-CN': '需要帮助? 🔍',
+  'zh-TW': '需要幫助? 🔍',
+  'ar': 'تحتاج مساعدة؟ 🔍',
+  'pa': 'ਮਦਦ ਚਾਹੀਦੀ ਹੈ? 🔍',
+  'hi': 'मदद चाहिए? 🔍',
+  'fil': 'Kailangan ng Tulong? 🔍',
+  'vi': 'Cần trợ giúp? 🔍',
+  'th': 'ต้องการความช่วยเหลือ? 🔍',
+  'fa': 'نیاز به کمک دارید؟ 🔍',
+  'prs': 'کمک ضرورت است؟ 🔍',
+  'id': 'Butuh Bantuan? 🔍',
+  'my': 'အကူအညီလိုလား? 🔍',
+  'ko': '도움이 필요하세요? 🔍',
+  'ur': 'مدد چاہیے؟ 🔍',
+  'am': 'እርዳታ ይፈልጋሉ? 🔍',
+  'ta': 'உதவி தேவையா? 🔍',
+  'si': 'උදව් අවශ්යද? 🔍',
+  'tr': 'Yardıma mı ihtiyacınız var? 🔍',
+  'uk': 'Потрібна допомога? 🔍',
+  'ru': 'Нужна помощь? 🔍',
+  'ti': 'ሓገዝ ይደሊ ዶ? 🔍',
+  'ms': 'Perlukan bantuan? 🔍',
+  'ja': '助けが必要ですか？ 🔍',
+  'fr': 'Besoin d\'aide? 🔍',
+  'es': '¿Necesitas ayuda? 🔍',
+  'sw': 'Unahitaji msaada? 🔍',
+  'el': 'Χρειάζεστε βοήθεια; 🔍',
+  'it': 'Hai bisogno di aiuto? 🔍',
+  'en': 'Need Help? 🔍',
+};
 
 function shuffleOptions(question) {
   const options = [...question.options];
@@ -115,6 +149,7 @@ export default function QuizScreen({ navigation, route }) {
   const { state, dispatch } = useQuiz();
   const mode = route.params?.mode || 'full';
   const category = route.params?.category;
+  const userLanguage = state.settings?.nativeLanguage || 'en';
 
   useEffect(() => {
     // Get questions based on mode and category
@@ -148,11 +183,11 @@ export default function QuizScreen({ navigation, route }) {
         ? currentQ.question 
         : currentQ.question?.text || '';
       
-      // Updated to use the named function instead of the service object
+      // Use our keyword translation service
       const result = await analyzeQuestionAndOptions(
         questionText, 
         currentQ.options, 
-        state.settings?.nativeLanguage || 'en'
+        userLanguage
       );
       
       // Set the terms for both the help modal and the question explanation section
@@ -160,17 +195,16 @@ export default function QuizScreen({ navigation, route }) {
       setTermsAnalysis(result.terms || []);
     } catch (error) {
       console.error('Error getting help:', error);
-      // Use fallback analysis if API call fails
+      // Use fallback analysis 
       const currentQ = quizQuestions[currentQuestion];
       if (currentQ) {
         const questionText = typeof currentQ.question === 'string'
           ? currentQ.question
           : currentQ.question?.text || '';
         
-        // Updated to use the named function instead of the service object
         const fallbackResult = getFallbackAnalysis(
           questionText + ' ' + currentQ.options.join(' '),
-          state.settings?.nativeLanguage || 'en'
+          userLanguage
         );
         setHelpTerms(fallbackResult.terms || []);
         setTermsAnalysis(fallbackResult.terms || []);
@@ -269,6 +303,11 @@ export default function QuizScreen({ navigation, route }) {
     ]).start();
   };
 
+  // Get the correct help button text based on user language
+  const getHelpButtonText = () => {
+    return HELP_BUTTON_TRANSLATIONS[userLanguage] || 'Need Help? 🔍';
+  };
+
   // Question List Modal
   const QuestionListModal = () => (
     <Modal
@@ -352,6 +391,7 @@ export default function QuizScreen({ navigation, route }) {
         isLoading={isLoadingHelp}
         terms={helpTerms}
         isDarkMode={state.settings?.theme === 'dark'}
+        language={userLanguage}
       />
       
       <ScrollView contentContainerStyle={styles.scrollContainer}>
@@ -391,23 +431,23 @@ export default function QuizScreen({ navigation, route }) {
 
         {/* Question content */}
 <Animated.View style={{ opacity: fadeAnim }}>
-  {/* Use the new UnifiedQuestionText component */}
+  {/* Use the UnifiedQuestionText component */}
   <UnifiedQuestionText 
     text={currentQuestionText}
     keywords={termsAnalysis.map(term => ({ 
       word: term.term, 
       definition: term.explanation,
-      translations: { [state.settings?.nativeLanguage || 'en']: term.translation }
+      translations: { [userLanguage]: term.translation }
     }))}
     showDefinitions={false}
   />
 
-  {/* Help button */}
+  {/* Help button with translated text */}
   <TouchableOpacity 
     style={styles.helpButton}
     onPress={handleHelpPress}
   >
-    <Text style={styles.helpButtonText}>Need Help? 🔍</Text>
+    <Text style={styles.helpButtonText}>{getHelpButtonText()}</Text>
   </TouchableOpacity>
 
           <View style={styles.optionsContainer}>

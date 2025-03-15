@@ -1,4 +1,4 @@
-// src/screens/DatabaseStatusScreen.js
+// src/screens/DatabaseStatusScreen.js - Updated to remove QuizAnalysisCache dependency
 import React, { useState, useEffect } from 'react';
 import { 
   View, 
@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { useQuiz } from '../contexts/QuizContext';
 import GlobalTermsDatabase from '../utils/GlobalTermsDatabase';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function DatabaseStatusScreen({ navigation }) {
   const [isLoading, setIsLoading] = useState(true);
@@ -33,24 +34,13 @@ export default function DatabaseStatusScreen({ navigation }) {
       // Initialize the database if it's not already initialized
       await GlobalTermsDatabase.init();
       
-      // Get all terms
-      const allTerms = GlobalTermsDatabase.getAllTerms();
-      const totalTerms = Object.keys(allTerms).length;
-      
-      // Get translations stats
-      const languages = Object.keys(GlobalTermsDatabase.translations);
-      const languageStats = languages.map(lang => {
-        const translations = GlobalTermsDatabase.getAllTranslationsForLanguage(lang);
-        return {
-          code: lang,
-          count: Object.keys(translations).length
-        };
-      });
+      // Get database stats
+      const dbStats = GlobalTermsDatabase.getStats();
       
       setStats({
-        totalTerms,
-        totalLanguages: languages.length,
-        languageStats
+        totalTerms: dbStats.totalTerms || 0,
+        totalLanguages: dbStats.totalLanguages || 0,
+        languageStats: dbStats.languageStats || []
       });
     } catch (error) {
       console.error('Error loading database stats:', error);
@@ -71,11 +61,33 @@ export default function DatabaseStatusScreen({ navigation }) {
           onPress: async () => {
             setIsLoading(true);
             await GlobalTermsDatabase.clearDatabase();
+            
+            // Also clear any cached keyword results
+            const allKeys = await AsyncStorage.getAllKeys();
+            const cacheKeys = allKeys.filter(key => key.startsWith('@keyword_cache_'));
+            if (cacheKeys.length > 0) {
+              await AsyncStorage.multiRemove(cacheKeys);
+            }
+            
             await loadDatabaseStats();
           }
         }
       ]
     );
+  };
+
+  const handleReinitializeDatabase = async () => {
+    setIsLoading(true);
+    try {
+      await GlobalTermsDatabase.importFromKeywordsJson();
+      await loadDatabaseStats();
+      Alert.alert('Success', 'Database reinitialized from keywords.json');
+    } catch (error) {
+      console.error('Error reinitializing database:', error);
+      Alert.alert('Error', 'Failed to reinitialize database');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleExit = () => {
@@ -224,6 +236,13 @@ export default function DatabaseStatusScreen({ navigation }) {
           ))}
           
           <TouchableOpacity
+            style={styles.reinitButton}
+            onPress={handleReinitializeDatabase}
+          >
+            <Text style={styles.reinitButtonText}>Reinitialize from Keywords.json</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity
             style={styles.clearButton}
             onPress={handleClearDatabase}
           >
@@ -241,8 +260,9 @@ export default function DatabaseStatusScreen({ navigation }) {
             styles.disclaimerText,
             { color: settings?.theme === 'dark' ? '#ccc' : '#666' }
           ]}>
-            This database shows terms analyzed across all app users. 
-            The more the app is used, the more terms are added to improve translation quality for everyone.
+            This database contains terms and translations from keywords.json.
+            The app uses these definitions and translations to help users understand
+            complex citizenship terms in their native language.
           </Text>
         </View>
       </ScrollView>
@@ -353,12 +373,24 @@ const styles = StyleSheet.create({
     marginTop: 5,
     textAlign: 'right',
   },
+  reinitButton: {
+    backgroundColor: '#5856D6',
+    padding: 15,
+    borderRadius: 10,
+    alignItems: 'center',
+    marginTop: 20,
+  },
+  reinitButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+  },
   clearButton: {
     backgroundColor: '#ff3b30',
     padding: 15,
     borderRadius: 10,
     alignItems: 'center',
-    marginTop: 20,
+    marginTop: 10,
   },
   clearButtonText: {
     color: 'white',

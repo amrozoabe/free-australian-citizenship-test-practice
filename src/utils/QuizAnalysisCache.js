@@ -6,7 +6,7 @@ const CACHE_METADATA_KEY = '@quiz_cache_metadata';
 const CACHE_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 
 /**
- * Utility class for caching Claude API analysis results
+ * Utility class for caching keyword analysis results
  * Enhanced with expiration logic and metadata
  */
 class QuizAnalysisCache {
@@ -285,5 +285,3 @@ class QuizAnalysisCache {
     }
   }
 }
-
-export default QuizAnalysisCache;

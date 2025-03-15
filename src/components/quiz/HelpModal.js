@@ -1,4 +1,4 @@
-// src/components/quiz/HelpModal.js
+// src/components/quiz/HelpModal.js - Updated to use keyword database
 import React from 'react';
 import { 
   View, 
@@ -9,13 +9,89 @@ import {
   ScrollView, 
   ActivityIndicator 
 } from 'react-native';
+import { SUPPORTED_LANGUAGES } from '../../constants/languages';
+
+// Get a translated label for a given key and language
+const getTranslatedLabel = (key, language) => {
+  const translations = {
+    helpWithTerminology: {
+      'en': 'Help with Terminology',
+      'zh-CN': '术语帮助',
+      'zh-TW': '術語幫助',
+      'ar': 'مساعدة مع المصطلحات',
+      'pa': 'ਸ਼ਬਦਾਵਲੀ ਮਦਦ',
+      'hi': 'शब्दावली सहायता',
+      'fil': 'Tulong sa Terminolohiya',
+      'vi': 'Trợ giúp về Thuật ngữ',
+      'es': 'Ayuda con Terminología',
+      'fr': 'Aide avec la Terminologie'
+    },
+    analyzing: {
+      'en': 'Analyzing question...',
+      'zh-CN': '分析问题...',
+      'zh-TW': '分析問題...',
+      'ar': 'تحليل السؤال...',
+      'pa': 'ਸਵਾਲ ਦਾ ਵਿਸ਼ਲੇਸ਼ਣ ਕਰ ਰਿਹਾ ਹੈ...',
+      'hi': 'प्रश्न का विश्लेषण कर रहा है...',
+      'fil': 'Sinusuri ang tanong...',
+      'vi': 'Đang phân tích câu hỏi...',
+      'es': 'Analizando pregunta...',
+      'fr': 'Analyse de la question...'
+    },
+    noTerms: {
+      'en': 'No complex terms identified in this question.',
+      'zh-CN': '在此问题中没有发现复杂术语。',
+      'zh-TW': '在此問題中沒有發現複雜術語。',
+      'ar': 'لم يتم تحديد مصطلحات معقدة في هذا السؤال.',
+      'pa': 'ਇਸ ਸਵਾਲ ਵਿੱਚ ਕੋਈ ਜਟਿਲ ਸ਼ਬਦ ਨਹੀਂ ਮਿਲੇ।',
+      'hi': 'इस प्रश्न में कोई जटिल शब्द नहीं पाए गए।',
+      'fil': 'Walang nakilalang komplikadong termino sa tanong na ito.',
+      'vi': 'Không có thuật ngữ phức tạp nào được xác định trong câu hỏi này.',
+      'es': 'No se identificaron términos complejos en esta pregunta.',
+      'fr': 'Aucun terme complexe identifié dans cette question.'
+    },
+    translation: {
+      'en': 'Translation:',
+      'zh-CN': '翻译:',
+      'zh-TW': '翻譯:',
+      'ar': 'الترجمة:',
+      'pa': 'ਅਨੁਵਾਦ:',
+      'hi': 'अनुवाद:',
+      'fil': 'Pagsasalin:',
+      'vi': 'Dịch:',
+      'es': 'Traducción:',
+      'fr': 'Traduction:'
+    },
+    close: {
+      'en': 'Close',
+      'zh-CN': '关闭',
+      'zh-TW': '關閉',
+      'ar': 'إغلاق',
+      'pa': 'ਬੰਦ ਕਰੋ',
+      'hi': 'बंद करें',
+      'fil': 'Isara',
+      'vi': 'Đóng',
+      'es': 'Cerrar',
+      'fr': 'Fermer'
+    }
+  };
+
+  // Get the translation for this key and language
+  if (translations[key] && translations[key][language]) {
+    return translations[key][language];
+  }
+  
+  // Fall back to English if translation not available
+  return translations[key]['en'] || key;
+};
 
 const HelpModal = ({ 
   visible, 
   onClose, 
   isLoading, 
   terms = [], 
-  isDarkMode = false 
+  isDarkMode = false,
+  language = 'en' 
 }) => {
   return (
     <Modal
@@ -34,7 +110,7 @@ const HelpModal = ({
               styles.modalTitle,
               { color: isDarkMode ? '#fff' : '#333' }
             ]}>
-              Help with Terminology
+              {getTranslatedLabel('helpWithTerminology', language)}
             </Text>
             <TouchableOpacity onPress={onClose}>
               <Text style={styles.closeButton}>✕</Text>
@@ -48,7 +124,7 @@ const HelpModal = ({
                 styles.loadingText,
                 { color: isDarkMode ? '#ccc' : '#666' }
               ]}>
-                Analyzing question...
+                {getTranslatedLabel('analyzing', language)}
               </Text>
             </View>
           ) : terms.length === 0 ? (
@@ -56,7 +132,7 @@ const HelpModal = ({
               styles.noTermsText,
               { color: isDarkMode ? '#ccc' : '#666' }
             ]}>
-              No complex terms identified in this question.
+              {getTranslatedLabel('noTerms', language)}
             </Text>
           ) : (
             <ScrollView>
@@ -82,7 +158,7 @@ const HelpModal = ({
                         styles.translationHeader,
                         { color: isDarkMode ? '#bbb' : '#555' }
                       ]}>
-                        Translation:
+                        {getTranslatedLabel('translation', language)}
                       </Text>
                       <Text style={[
                         styles.translation,
@@ -108,7 +184,9 @@ const HelpModal = ({
             style={styles.closeButtonContainer}
             onPress={onClose}
           >
-            <Text style={styles.closeButtonText}>Close</Text>
+            <Text style={styles.closeButtonText}>
+              {getTranslatedLabel('close', language)}
+            </Text>
           </TouchableOpacity>
         </View>
       </View>

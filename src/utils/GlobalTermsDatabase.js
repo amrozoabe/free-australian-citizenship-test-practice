@@ -28,13 +28,8 @@ class GlobalTermsDatabase {
       this.translations = translationsData ? JSON.parse(translationsData) : {};
       this.lastUpdate = lastUpdateData ? JSON.parse(lastUpdateData) : 0;
       
-      // Import keywords.json data if database is empty or it's been a while
-      const shouldImport = Object.keys(this.terms).length === 0 || 
-                           (Date.now() - this.lastUpdate > 7 * 24 * 60 * 60 * 1000); // 7 days
-      
-      if (shouldImport) {
-        await this.importFromKeywordsJson();
-      }
+      // Always import keywords.json data on initialization to ensure we have the latest data
+      await this.importFromKeywordsJson();
       
       console.log(`Global terms database initialized with ${Object.keys(this.terms).length} terms`);
       console.log(`Global translations database initialized with translations for ${Object.keys(this.translations).length} languages`);
@@ -214,7 +209,7 @@ class GlobalTermsDatabase {
 
  /**
  * Find all terms in the text that exist in our database or match suggested terms
- * Enhanced to be more thorough in finding matching terms
+ * Enhanced to be more thorough in finding matching terms from keywords.json
  * 
  * @param {string} text - The text to analyze
  * @param {string} language - The target language code
@@ -241,7 +236,7 @@ static analyzeText(text, language, suggestedTerms = []) {
         // Check if the term is in the text
         if (normalizedText.includes(normalizedTerm)) {
           const foundTerm = {
-            term: normalizedTerm,
+            term: term,
             explanation: this.terms[normalizedTerm],
             translation: this.translations[language]?.[normalizedTerm] || null
           };
@@ -260,70 +255,22 @@ static analyzeText(text, language, suggestedTerms = []) {
   
   for (const term of allTerms) {
     // Skip if we've already found this term
-    if (processedTerms.has(term.toLowerCase())) {
+    if (processedTerms.has(term)) {
       continue;
     }
     
-    // Use word boundary regex to find whole word matches
-    const regex = new RegExp(`\\b${term}\\b`, 'i');
-    if (regex.test(text)) {
+    // Try to find the term in the text
+    const termLower = term.toLowerCase();
+    if (normalizedText.includes(termLower)) {
+      // Check if the term is a whole word
       const foundTerm = {
         term: term,
-        explanation: this.terms[term],
-        translation: this.translations[language]?.[term] || null
+        explanation: this.terms[termLower],
+        translation: this.translations[language]?.[termLower] || null
       };
       
       foundTerms.push(foundTerm);
-      processedTerms.add(term.toLowerCase());
-    }
-  }
-  
-  // Check for multi-word terms that might not have proper word boundaries
-  const multiWordTerms = allTerms.filter(term => term.includes(' '));
-  for (const term of multiWordTerms) {
-    // Skip if we've already found this term
-    if (processedTerms.has(term.toLowerCase())) {
-      continue;
-    }
-    
-    if (normalizedText.includes(term.toLowerCase())) {
-      const foundTerm = {
-        term: term,
-        explanation: this.terms[term],
-        translation: this.translations[language]?.[term] || null
-      };
-      
-      foundTerms.push(foundTerm);
-      processedTerms.add(term.toLowerCase());
-    }
-  }
-  
-  // Special handling for national anthem terms
-  const anthemTerms = [
-    'australians all', 'let us rejoice', 'young and free', 'golden soil',
-    'wealth for toil', 'national anthem', 'southern cross', 'commonwealth of australia',
-    'beneath our radiant', 'advance australia fair'
-  ];
-  
-  for (const term of anthemTerms) {
-    // Skip if we've already found this term
-    if (processedTerms.has(term.toLowerCase())) {
-      continue;
-    }
-    
-    if (normalizedText.includes(term.toLowerCase())) {
-      // If we don't have this term in our database, create a basic entry for it
-      const explanation = this.terms[term] || 
-        `A phrase from Australia's national anthem, "Advance Australia Fair"`;
-      
-      const foundTerm = {
-        term: term,
-        explanation: explanation,
-        translation: this.translations[language]?.[term] || null
-      };
-      
-      foundTerms.push(foundTerm);
-      processedTerms.add(term.toLowerCase());
+      processedTerms.add(termLower);
     }
   }
   

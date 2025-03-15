@@ -1,4 +1,4 @@
-// src/screens/DiagnosticScreen.js
+// src/screens/DiagnosticScreen.js - Modified to remove QuizAnalysisCache dependency
 import React, { useState, useEffect } from 'react';
 import { 
   View, 
@@ -12,18 +12,14 @@ import {
 } from 'react-native';
 import { useQuiz } from '../contexts/QuizContext';
 import GlobalTermsDatabase from '../utils/GlobalTermsDatabase';
-import QuizAnalysisCache from '../utils/QuizAnalysisCache';
-import claudeService from '../services/claudeTranslationService';
 import { SUPPORTED_LANGUAGES } from '../constants/languages';
-import apiKeyValidator from '../utils/apiKeyValidator';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function DiagnosticScreen({ navigation }) {
   const [isLoading, setIsLoading] = useState(true);
   const [diagnosticState, setDiagnosticState] = useState({
     databaseStats: {},
-    cacheStats: {},
     testResults: [],
-    apiKeyValid: false,
     testRunning: false
   });
   const { state } = useQuiz();
@@ -36,22 +32,15 @@ export default function DiagnosticScreen({ navigation }) {
   const loadStats = async () => {
     setIsLoading(true);
     try {
-      // Initialize databases if needed
-      await Promise.all([
-        GlobalTermsDatabase.init(),
-        QuizAnalysisCache.init()
-      ]);
+      // Initialize database
+      await GlobalTermsDatabase.init();
       
       // Collect stats
       const databaseStats = GlobalTermsDatabase.getStats();
-      const cacheStats = await QuizAnalysisCache.getStats();
-      const apiKeyValid = apiKeyValidator.validateClaudeApiKey();
       
       setDiagnosticState({
         databaseStats,
-        cacheStats,
         testResults: [],
-        apiKeyValid,
         testRunning: false
       });
     } catch (error) {
@@ -83,60 +72,17 @@ export default function DiagnosticScreen({ navigation }) {
         success: true
       });
       
-      // Test term identification
-      try {
-        const testText = testQuestions[0];
-        const keyTerms = claudeService.identifyKeyTerms(testText);
-        testResults.push({
-          name: 'Term Identification',
-          result: `Found ${keyTerms.length} terms: ${keyTerms.join(', ')}`,
-          success: keyTerms.length > 0
-        });
-      } catch (error) {
-        testResults.push({
-          name: 'Term Identification',
-          result: `Error: ${error.message}`,
-          success: false
-        });
-      }
-      
-      // Test database lookup
+      // Test database functionality
       try {
         const dbTerms = GlobalTermsDatabase.analyzeText(testQuestions[0], testLanguage);
         testResults.push({
-          name: 'Database Lookup',
+          name: 'Keyword Database',
           result: `Found ${dbTerms.length} terms in database`,
           success: true
         });
       } catch (error) {
         testResults.push({
-          name: 'Database Lookup',
-          result: `Error: ${error.message}`,
-          success: false
-        });
-      }
-      
-      // Test cache functionality
-      try {
-        // First try to get from cache (should be a cache miss)
-        await QuizAnalysisCache.getFromCache(testQuestions[1], testLanguage);
-        
-        // Add to cache
-        await QuizAnalysisCache.saveToCache(testQuestions[1], testLanguage, {
-          terms: [{ term: 'test', explanation: 'test', translation: 'test' }]
-        });
-        
-        // Try to get it again (should be a cache hit)
-        const cacheResult = await QuizAnalysisCache.getFromCache(testQuestions[1], testLanguage);
-        
-        testResults.push({
-          name: 'Cache Operation',
-          result: cacheResult ? 'Cache write and read successful' : 'Cache read failed',
-          success: !!cacheResult
-        });
-      } catch (error) {
-        testResults.push({
-          name: 'Cache Operation',
+          name: 'Keyword Database',
           result: `Error: ${error.message}`,
           success: false
         });
@@ -163,27 +109,21 @@ export default function DiagnosticScreen({ navigation }) {
         });
       }
       
-      // Test translation system with a fallback term (to avoid API calls)
+      // Test translation availability
       try {
-        const fallbackResult = claudeService.getFallbackAnalysis(
-          "The Australian parliamentary democracy follows the rule of law", 
-          testLanguage
-        );
-        
-        const hasTranslations = fallbackResult.terms && 
-                               fallbackResult.terms.length > 0 && 
-                               fallbackResult.terms[0].translation;
+        const translations = GlobalTermsDatabase.getAllTranslationsForLanguage(testLanguage);
+        const translationCount = Object.keys(translations).length;
         
         testResults.push({
-          name: 'Translation System',
-          result: hasTranslations 
-            ? `Found translations for ${fallbackResult.terms.length} terms` 
-            : 'No translations found',
-          success: hasTranslations
+          name: 'Translation Availability',
+          result: translationCount > 0 
+            ? `Found ${translationCount} translations for ${testLanguage}` 
+            : `No translations found for ${testLanguage}`,
+          success: translationCount > 0
         });
       } catch (error) {
         testResults.push({
-          name: 'Translation System',
+          name: 'Translation Availability',
           result: `Error: ${error.message}`,
           success: false
         });
@@ -213,8 +153,12 @@ export default function DiagnosticScreen({ navigation }) {
 
   const refreshData = async () => {
     try {
-      // Clear cache
-      await QuizAnalysisCache.clearCache();
+      // Clear any cache keys from AsyncStorage
+      const allKeys = await AsyncStorage.getAllKeys();
+      const cacheKeys = allKeys.filter(key => key.startsWith('@keyword_cache_'));
+      if (cacheKeys.length > 0) {
+        await AsyncStorage.multiRemove(cacheKeys);
+      }
       
       // Reload database from keywords.json
       await GlobalTermsDatabase.importFromKeywordsJson();
@@ -285,7 +229,7 @@ export default function DiagnosticScreen({ navigation }) {
       
       <ScrollView style={styles.scrollView}>
         <View style={styles.statsContainer}>
-          {/* API Status */}
+          {/* Keyword System Status */}
           <View style={[
             styles.statsCard,
             { backgroundColor: settings?.theme === 'dark' ? '#333' : 'white' }
@@ -294,7 +238,7 @@ export default function DiagnosticScreen({ navigation }) {
               styles.statsTitle,
               { color: settings?.theme === 'dark' ? '#fff' : '#1a1a1a' }
             ]}>
-              API Status
+              Keyword Translation System
             </Text>
             
             <View style={styles.statRow}>
@@ -302,16 +246,28 @@ export default function DiagnosticScreen({ navigation }) {
                 styles.statLabel,
                 { color: settings?.theme === 'dark' ? '#ccc' : '#666' }
               ]}>
-                Claude API Key:
+                Status:
               </Text>
               <Text style={[
                 styles.statValue,
-                { 
-                  color: diagnosticState.apiKeyValid ? 
-                    '#34C759' : (settings?.theme === 'dark' ? '#ff6b6b' : '#ff3b30') 
-                }
+                { color: '#34C759' }
               ]}>
-                {diagnosticState.apiKeyValid ? 'Valid' : 'Not Configured'}
+                Active
+              </Text>
+            </View>
+            
+            <View style={styles.statRow}>
+              <Text style={[
+                styles.statLabel,
+                { color: settings?.theme === 'dark' ? '#ccc' : '#666' }
+              ]}>
+                Translations:
+              </Text>
+              <Text style={[
+                styles.statValue,
+                { color: settings?.theme === 'dark' ? '#fff' : '#1a1a1a' }
+              ]}>
+                {Object.keys(diagnosticState.databaseStats.languageStats || {}).length || 0} languages
               </Text>
             </View>
           </View>
@@ -371,51 +327,6 @@ export default function DiagnosticScreen({ navigation }) {
               ]}>
                 {diagnosticState.databaseStats.lastUpdate ? 
                   new Date(diagnosticState.databaseStats.lastUpdate).toLocaleString() : 
-                  'Never'}
-              </Text>
-            </View>
-          </View>
-          
-          {/* Cache Stats */}
-          <View style={[
-            styles.statsCard,
-            { backgroundColor: settings?.theme === 'dark' ? '#333' : 'white' }
-          ]}>
-            <Text style={[
-              styles.statsTitle,
-              { color: settings?.theme === 'dark' ? '#fff' : '#1a1a1a' }
-            ]}>
-              Cache Statistics
-            </Text>
-            
-            <View style={styles.statRow}>
-              <Text style={[
-                styles.statLabel,
-                { color: settings?.theme === 'dark' ? '#ccc' : '#666' }
-              ]}>
-                Cached Items:
-              </Text>
-              <Text style={[
-                styles.statValue,
-                { color: settings?.theme === 'dark' ? '#fff' : '#1a1a1a' }
-              ]}>
-                {diagnosticState.cacheStats.totalEntries || 0}
-              </Text>
-            </View>
-            
-            <View style={styles.statRow}>
-              <Text style={[
-                styles.statLabel,
-                { color: settings?.theme === 'dark' ? '#ccc' : '#666' }
-              ]}>
-                Last Cleanup:
-              </Text>
-              <Text style={[
-                styles.statValue,
-                { color: settings?.theme === 'dark' ? '#fff' : '#1a1a1a' }
-              ]}>
-                {diagnosticState.cacheStats.lastCleanup ? 
-                  new Date(diagnosticState.cacheStats.lastCleanup).toLocaleString() : 
                   'Never'}
               </Text>
             </View>
@@ -495,8 +406,7 @@ export default function DiagnosticScreen({ navigation }) {
             { color: settings?.theme === 'dark' ? '#ccc' : '#666' }
           ]}>
             This diagnostic screen helps verify that all components of the translation system
-            are working correctly. If any test fails, try refreshing the data or checking your
-            internet connection.
+            are working correctly. The app uses a local keyword database for definitions and translations.
           </Text>
         </View>
       </ScrollView>
