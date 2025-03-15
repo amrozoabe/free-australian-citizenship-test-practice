@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, ScrollView } from 'react-native';
 import { useQuiz } from '../contexts/QuizContext';
+import LanguageSelector from '../components/LanguageSelector';
 
 export default function HomeScreen({ navigation }) {
   const { state } = useQuiz();
@@ -43,6 +44,7 @@ export default function HomeScreen({ navigation }) {
             Prepare for your citizenship test with our practice questions
           </Text>
         </View>
+        <LanguageSelector />
         {/* Quick Stats */}
         <View style={styles.statsContainer}>
           <StatItem 
