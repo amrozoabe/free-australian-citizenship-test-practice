@@ -1,4 +1,4 @@
-// src/utils/GlobalTermsDatabase.js
+// src/utils/GlobalTermsDatabase.js - Simplified version
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import keywords from '../data/keywords.json';
 
@@ -32,7 +32,6 @@ class GlobalTermsDatabase {
       await this.importFromKeywordsJson();
       
       console.log(`Global terms database initialized with ${Object.keys(this.terms).length} terms`);
-      console.log(`Global translations database initialized with translations for ${Object.keys(this.translations).length} languages`);
       
       return true;
     } catch (error) {
@@ -102,7 +101,6 @@ class GlobalTermsDatabase {
     try {
       await AsyncStorage.setItem(GLOBAL_TERMS_KEY, JSON.stringify(this.terms));
       await AsyncStorage.setItem(GLOBAL_TRANSLATIONS_KEY, JSON.stringify(this.translations));
-      console.log('Global terms database saved successfully');
       return true;
     } catch (error) {
       console.error('Error saving global terms database:', error);
@@ -111,234 +109,47 @@ class GlobalTermsDatabase {
   }
 
   /**
-   * Add a term and its explanation to the global database
-   * @param {string} term - The term to add
-   * @param {string} explanation - The English explanation of the term
-   * @returns {boolean} - Success status
-   */
-  static async addTerm(term, explanation) {
-    if (!term || !explanation) return false;
-    
-    // Normalize the term to lowercase
-    const normalizedTerm = term.toLowerCase().trim();
-    
-    // Only add if the term doesn't exist or has a shorter explanation
-    const existingExplanation = this.terms[normalizedTerm];
-    if (!existingExplanation || explanation.length > existingExplanation.length) {
-      this.terms[normalizedTerm] = explanation;
-      await this.save();
-      return true;
-    }
-    
-    return false;
-  }
-
-  /**
-   * Add a translation for a term
-   * @param {string} term - The term to add a translation for
-   * @param {string} language - The language code
-   * @param {string} translation - The translation
-   * @returns {boolean} - Success status
-   */
-  static async addTranslation(term, language, translation) {
-    if (!term || !language || !translation) return false;
-    
-    // Normalize the term to lowercase
-    const normalizedTerm = term.toLowerCase().trim();
-    
-    // Initialize language object if it doesn't exist
-    if (!this.translations[language]) {
-      this.translations[language] = {};
-    }
-    
-    // Add the translation
-    this.translations[language][normalizedTerm] = translation;
-    await this.save();
-    return true;
-  }
-
-  /**
-   * Get a term's explanation from the database
-   * @param {string} term - The term to look up
-   * @returns {string|null} - The explanation or null if not found
-   */
-  static getTerm(term) {
-    if (!term) return null;
-    
-    const normalizedTerm = term.toLowerCase().trim();
-    return this.terms[normalizedTerm] || null;
-  }
-
-  /**
-   * Get a translation for a term
-   * @param {string} term - The term to translate
+   * Find all terms in the text that exist in our database
+   * 
+   * @param {string} text - The text to analyze
    * @param {string} language - The target language code
-   * @returns {string|null} - The translation or null if not found
+   * @returns {Array} - Array of found terms with explanations and translations
    */
-  static getTranslation(term, language) {
-    if (!term || !language) return null;
+  static analyzeText(text, language) {
+    if (!text) return [];
     
-    const normalizedTerm = term.toLowerCase().trim();
-    return this.translations[language]?.[normalizedTerm] || null;
-  }
-
-  /**
-   * Check if a term exists in the database
-   * @param {string} term - The term to check
-   * @returns {boolean} - Whether the term exists
-   */
-  static hasTerm(term) {
-    if (!term) return false;
+    const foundTerms = [];
+    const normalizedText = text.toLowerCase();
+    const processedTerms = new Set(); // Track which terms we've already processed
     
-    const normalizedTerm = term.toLowerCase().trim();
-    return !!this.terms[normalizedTerm];
-  }
-
-  /**
-   * Check if a translation exists for a term
-   * @param {string} term - The term to check
-   * @param {string} language - The language code
-   * @returns {boolean} - Whether the translation exists
-   */
-  static hasTranslation(term, language) {
-    if (!term || !language) return false;
+    // Check for exact word matches using word boundary regex
+    const allTerms = Object.keys(this.terms);
     
-    const normalizedTerm = term.toLowerCase().trim();
-    return !!this.translations[language]?.[normalizedTerm];
-  }
-
- /**
- * Find all terms in the text that exist in our database or match suggested terms
- * Enhanced to be more thorough in finding matching terms from keywords.json
- * 
- * @param {string} text - The text to analyze
- * @param {string} language - The target language code
- * @param {string[]} [suggestedTerms] - Suggested terms to prioritize checking
- * @returns {Array} - Array of found terms with explanations and translations
- */
-static analyzeText(text, language, suggestedTerms = []) {
-  if (!text) return [];
-  
-  const foundTerms = [];
-  const normalizedText = text.toLowerCase();
-  const processedTerms = new Set(); // Track which terms we've already processed
-  
-  // First check suggested terms if provided
-  if (Array.isArray(suggestedTerms) && suggestedTerms.length > 0) {
-    for (const term of suggestedTerms) {
-      const normalizedTerm = term.toLowerCase().trim();
+    // Sort terms by length (longest first) to handle cases where one term is part of another
+    allTerms.sort((a, b) => b.length - a.length);
+    
+    for (const term of allTerms) {
+      // Skip if we've already found this term
+      if (processedTerms.has(term)) {
+        continue;
+      }
       
-      // Skip if we've already processed this term
-      if (processedTerms.has(normalizedTerm)) continue;
-      
-      // Check if the term exists in our database
-      if (this.terms[normalizedTerm]) {
-        // Check if the term is in the text
-        if (normalizedText.includes(normalizedTerm)) {
-          const foundTerm = {
-            term: term,
-            explanation: this.terms[normalizedTerm],
-            translation: this.translations[language]?.[normalizedTerm] || null
-          };
-          foundTerms.push(foundTerm);
-          processedTerms.add(normalizedTerm);
-        }
+      // Try to find the term in the text
+      const termLower = term.toLowerCase();
+      if (normalizedText.includes(termLower)) {
+        // Add the term to found terms
+        const foundTerm = {
+          term: term,
+          explanation: this.terms[termLower],
+          translation: this.translations[language]?.[termLower] || null
+        };
+        
+        foundTerms.push(foundTerm);
+        processedTerms.add(termLower);
       }
     }
-  }
-  
-  // Check for exact word matches using word boundary regex
-  const allTerms = Object.keys(this.terms);
-  
-  // Sort terms by length (longest first) to handle cases where one term is part of another
-  allTerms.sort((a, b) => b.length - a.length);
-  
-  for (const term of allTerms) {
-    // Skip if we've already found this term
-    if (processedTerms.has(term)) {
-      continue;
-    }
     
-    // Try to find the term in the text
-    const termLower = term.toLowerCase();
-    if (normalizedText.includes(termLower)) {
-      // Check if the term is a whole word
-      const foundTerm = {
-        term: term,
-        explanation: this.terms[termLower],
-        translation: this.translations[language]?.[termLower] || null
-      };
-      
-      foundTerms.push(foundTerm);
-      processedTerms.add(termLower);
-    }
-  }
-  
-  return foundTerms;
-}
-
-  /**
-   * Get all stored terms and their explanations
-   * @returns {Object} - All terms and explanations
-   */
-  static getAllTerms() {
-    return { ...this.terms };
-  }
-
-  /**
-   * Get all translations for a specific language
-   * @param {string} language - The language code
-   * @returns {Object} - All translations for the language
-   */
-  static getAllTranslationsForLanguage(language) {
-    return { ...(this.translations[language] || {}) };
-  }
-
-  /**
-   * Get database statistics
-   * @returns {Object} - Statistics about the database
-   */
-  static getStats() {
-    const totalTerms = Object.keys(this.terms).length;
-    const languages = Object.keys(this.translations);
-    
-    const languageStats = languages.map(lang => {
-      const translations = Object.keys(this.translations[lang] || {}).length;
-      const coverage = totalTerms > 0 ? (translations / totalTerms) * 100 : 0;
-      
-      return {
-        code: lang,
-        count: translations,
-        coverage: Math.round(coverage)
-      };
-    });
-    
-    return {
-      totalTerms,
-      totalLanguages: languages.length,
-      lastUpdate: this.lastUpdate,
-      languageStats
-    };
-  }
-
-  /**
-   * Clear the entire database
-   * @returns {Promise<boolean>} - Success status
-   */
-  static async clearDatabase() {
-    try {
-      this.terms = {};
-      this.translations = {};
-      this.lastUpdate = 0;
-      await AsyncStorage.removeItem(GLOBAL_TERMS_KEY);
-      await AsyncStorage.removeItem(GLOBAL_TRANSLATIONS_KEY);
-      await AsyncStorage.removeItem(LAST_UPDATE_KEY);
-      console.log('Global terms database cleared');
-      return true;
-    } catch (error) {
-      console.error('Error clearing global terms database:', error);
-      return false;
-    }
+    return foundTerms;
   }
 
   /**
@@ -355,22 +166,49 @@ static analyzeText(text, language, suggestedTerms = []) {
       // Process each term in the predefined data
       for (const [term, data] of Object.entries(predefinedTerms)) {
         if (data.explanation) {
-          await this.addTerm(term, data.explanation);
+          // Add the term
+          this.terms[term.toLowerCase()] = data.explanation;
         }
         
         if (data.translations && typeof data.translations === 'object') {
           for (const [lang, translation] of Object.entries(data.translations)) {
             if (translation) {
-              await this.addTranslation(term, lang, translation);
+              // Initialize language object if it doesn't exist
+              if (!this.translations[lang]) {
+                this.translations[lang] = {};
+              }
+              
+              // Add the translation
+              this.translations[lang][term.toLowerCase()] = translation;
             }
           }
         }
       }
       
-      console.log(`Imported ${Object.keys(predefinedTerms).length} predefined terms`);
+      // Save the updated data
+      await this.save();
       return true;
     } catch (error) {
       console.error('Error importing predefined terms:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Clear the entire database
+   * @returns {Promise<boolean>} - Success status
+   */
+  static async clearDatabase() {
+    try {
+      this.terms = {};
+      this.translations = {};
+      this.lastUpdate = 0;
+      await AsyncStorage.removeItem(GLOBAL_TERMS_KEY);
+      await AsyncStorage.removeItem(GLOBAL_TRANSLATIONS_KEY);
+      await AsyncStorage.removeItem(LAST_UPDATE_KEY);
+      return true;
+    } catch (error) {
+      console.error('Error clearing global terms database:', error);
       return false;
     }
   }

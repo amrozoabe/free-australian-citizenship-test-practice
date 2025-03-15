@@ -1,7 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, ScrollView } from 'react-native';
 import { useQuiz } from '../contexts/QuizContext';
-import LanguageSelector from '../components/LanguageSelector';
 
 export default function HomeScreen({ navigation }) {
   const { state } = useQuiz();
@@ -44,7 +43,6 @@ export default function HomeScreen({ navigation }) {
             Prepare for your citizenship test with our practice questions
           </Text>
         </View>
-        <LanguageSelector />
         {/* Quick Stats */}
         <View style={styles.statsContainer}>
           <StatItem 
@@ -98,18 +96,6 @@ export default function HomeScreen({ navigation }) {
             icon="🎯"
             onPress={() => navigation.navigate('Quiz', { mode: 'practice' })}
             color="#FF2D55"
-          />
-          <MenuButton
-            title="Terms Database"
-            icon="🔤"
-            onPress={() => navigation.navigate('DatabaseStatus')}
-            color="#AF52DE"
-          />
-          <MenuButton
-            title="Diagnostics"
-            icon="🔍"
-            onPress={() => navigation.navigate('Diagnostic')}
-            color="#5AC8FA"
           />
         </View>
 

@@ -4,10 +4,8 @@ import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, ScrollView, Ani
 import { useQuiz } from '../contexts/QuizContext';
 import { questions } from '../data/questions';
 import QuestionExplainer from '../components/quiz/QuestionExplainer';
-// Updated imports for the keyword service
 import { analyzeQuestionAndOptions, getFallbackAnalysis } from '../services/keywordTranslationService';
 import HelpModal from '../components/quiz/HelpModal';
-// Import the UnifiedQuestionText component
 import UnifiedQuestionText from '../components/quiz/UnifiedQuestionText';
 import { SUPPORTED_LANGUAGES } from '../constants/languages';
 
@@ -433,13 +431,15 @@ export default function QuizScreen({ navigation, route }) {
 <Animated.View style={{ opacity: fadeAnim }}>
   {/* Use the UnifiedQuestionText component */}
   <UnifiedQuestionText 
-    text={currentQuestionText}
-    keywords={termsAnalysis.map(term => ({ 
-      word: term.term, 
-      definition: term.explanation,
-      translations: { [userLanguage]: term.translation }
-    }))}
-    showDefinitions={false}
+  text={currentQuestionText}
+  keywords={termsAnalysis.map(term => ({ 
+    word: term.term, 
+    definition: term.explanation,
+    translations: { [userLanguage]: term.translation }
+  }))}
+  showDefinitions={false}
+  highlightKeywords={false} // Add this prop to disable keyword highlighting
+  userLanguage={userLanguage}
   />
 
   {/* Help button with translated text */}

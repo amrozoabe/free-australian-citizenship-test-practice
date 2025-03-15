@@ -8,7 +8,8 @@ const UnifiedQuestionText = ({
   text = "", 
   keywords: additionalKeywords = [], 
   userLanguage = null,
-  showDefinitions = true 
+  showDefinitions = true,
+  highlightKeywords = false // Add this prop to control keyword highlighting
 }) => {
   const [selectedKeyword, setSelectedKeyword] = useState(null);
   const [fadeAnim] = useState(new Animated.Value(1));
@@ -59,26 +60,38 @@ const UnifiedQuestionText = ({
         return bWord.length - aWord.length;
       });
     
-    // Replace each occurrence of a keyword with a marked version
+    // Replace each occurrence of a keyword with a marked version if highlighting is enabled
     let markedText = textContent;
     const foundKeywords = [];
     
-    sortedKeywords.forEach(keyword => {
-      const keywordText = typeof keyword === 'string' ? keyword : keyword.word;
-      const regex = new RegExp(`\\b${keywordText}\\b`, 'gi');
-      
-      // Check if the keyword exists in the text
-      if (regex.test(markedText)) {
-        // Add to found keywords
-        foundKeywords.push(keyword);
+    if (highlightKeywords) {
+      sortedKeywords.forEach(keyword => {
+        const keywordText = typeof keyword === 'string' ? keyword : keyword.word;
+        const regex = new RegExp(`\\b${keywordText}\\b`, 'gi');
         
-        // Reset the regex (since we used test() which moves the lastIndex)
-        regex.lastIndex = 0;
+        // Check if the keyword exists in the text
+        if (regex.test(markedText)) {
+          // Add to found keywords
+          foundKeywords.push(keyword);
+          
+          // Reset the regex (since we used test() which moves the lastIndex)
+          regex.lastIndex = 0;
+          
+          // Mark the keyword in text
+          markedText = markedText.replace(regex, `{${keywordText}}`);
+        }
+      });
+    } else {
+      // If highlighting is disabled, just identify keywords without marking them
+      sortedKeywords.forEach(keyword => {
+        const keywordText = typeof keyword === 'string' ? keyword : keyword.word;
+        const regex = new RegExp(`\\b${keywordText}\\b`, 'gi');
         
-        // Mark the keyword in text
-        markedText = markedText.replace(regex, `{${keywordText}}`);
-      }
-    });
+        if (regex.test(textContent)) {
+          foundKeywords.push(keyword);
+        }
+      });
+    }
     
     return { markedText, foundKeywords };
   };
@@ -86,8 +99,8 @@ const UnifiedQuestionText = ({
   // Process the text to find and mark keywords
   const { markedText, foundKeywords } = findKeywordsInText(text);
   
-  // Split the text by marked keywords
-  const parts = markedText.split(/(\{[^}]+\})/);
+  // Split the text by marked keywords if highlighting is enabled
+  const parts = highlightKeywords ? markedText.split(/(\{[^}]+\})/) : [text];
 
   const handleKeywordPress = (keyword) => {
     // Find the keyword info
@@ -147,27 +160,32 @@ const UnifiedQuestionText = ({
     setSelectedKeyword(null);
   };
 
-  // Render the text with interactive keywords
+  // Render the text with or without interactive keywords
   const renderText = () => {
-    return (
-      <Text style={styles.text}>
-        {parts.map((part, index) => {
-          const match = part.match(/\{([^}]+)\}/);
-          if (match) {
-            const word = match[1];
-            return (
-              <TouchableOpacity 
-                key={`keyword-${index}`} 
-                onPress={() => handleKeywordPress(word)}
-              >
-                <Text style={styles.keywordText}>{word}</Text>
-              </TouchableOpacity>
-            );
-          }
-          return <Text key={`text-${index}`}>{part}</Text>;
-        })}
-      </Text>
-    );
+    if (highlightKeywords) {
+      return (
+        <Text style={styles.text}>
+          {parts.map((part, index) => {
+            const match = part.match(/\{([^}]+)\}/);
+            if (match) {
+              const word = match[1];
+              return (
+                <TouchableOpacity 
+                  key={`keyword-${index}`} 
+                  onPress={() => handleKeywordPress(word)}
+                >
+                  <Text style={styles.keywordText}>{word}</Text>
+                </TouchableOpacity>
+              );
+            }
+            return <Text key={`text-${index}`}>{part}</Text>;
+          })}
+        </Text>
+      );
+    } else {
+      // Just render plain text without interactive keywords
+      return <Text style={styles.text}>{text}</Text>;
+    }
   };
 
   // Render the keyword definition
