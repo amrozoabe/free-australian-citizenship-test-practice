@@ -1,5 +1,4 @@
 // src/utils/AppInitializer.js
-import GlobalTermsDatabase from './GlobalTermsDatabase';
 
 /**
  * Handles initialization tasks for the app
@@ -24,10 +23,6 @@ class AppInitializer {
 
     try {
       console.log('Initializing app...');
-      
-      // Initialize the global terms database
-      await GlobalTermsDatabase.init();
-      this.initializationStatus.database = true;
       
       // Mark as initialized
       this.initialized = true;

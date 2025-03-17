@@ -4,7 +4,6 @@ import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, ScrollView, Ani
 import { useQuiz } from '../contexts/QuizContext';
 import { questions } from '../data/questions';
 import QuestionExplainer from '../components/quiz/QuestionExplainer';
-import { analyzeQuestionAndOptions, getFallbackAnalysis } from '../services/keywordTranslationService';
 import HelpModal from '../components/quiz/HelpModal';
 import UnifiedQuestionText from '../components/quiz/UnifiedQuestionText';
 import { SUPPORTED_LANGUAGES } from '../constants/languages';
