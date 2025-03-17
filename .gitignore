@@ -42,3 +42,6 @@ yarn-error.*
 .env.production.local
 
 app-example
+
+src/data/keywords.json
+src/data/questions.js
