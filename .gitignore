@@ -45,3 +45,4 @@ app-example
 
 src/data/keywords.json
 src/data/questions.js
+package-lock.json
