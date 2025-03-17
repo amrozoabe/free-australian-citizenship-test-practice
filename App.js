@@ -9,6 +9,7 @@ import StudyScreen from './src/screens/StudyScreen';
 import StatisticsScreen from './src/screens/StatisticsScreen';
 import BookmarksScreen from './src/screens/BookmarksScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
+import AppInitializer from './src/utils/AppInitializer';
 import { View, Text, ActivityIndicator } from 'react-native';
 
 const Stack = createNativeStackNavigator();
