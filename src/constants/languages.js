@@ -1,4 +1,5 @@
 export const SUPPORTED_LANGUAGES = [
+    { code: 'en', name: 'English', nativeName: 'English' },
     { code: 'zh-CN', name: 'Chinese (Simplified)', nativeName: '简体中文' },
     { code: 'zh-TW', name: 'Chinese (Traditional)', nativeName: '繁體中文' },
     { code: 'ar', name: 'Arabic', nativeName: 'العربية' },

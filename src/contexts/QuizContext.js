@@ -19,7 +19,7 @@ const defaultSettings = {
   soundEnabled: true,
   vibrationEnabled: true,
   timerEnabled: true,
-  nativeLanguage: 'en',
+  nativeLanguage: 'en', // English as default
 };
 
 // Define default statistics structure
@@ -70,24 +70,53 @@ export function QuizProvider({ children }) {
     loadAllData();
   }, []);
 
+  // Function to load settings with proper defaults
+  const loadSettings = async () => {
+    try {
+      const settingsData = await AsyncStorage.getItem(storageKeys.SETTINGS);
+      
+      if (settingsData) {
+        // Parse stored settings
+        const parsedSettings = JSON.parse(settingsData);
+        
+        // If there's no language set, ensure English is the default
+        if (!parsedSettings.nativeLanguage) {
+          parsedSettings.nativeLanguage = 'en';
+          // Save back to AsyncStorage
+          await AsyncStorage.setItem(storageKeys.SETTINGS, JSON.stringify(parsedSettings));
+        }
+        
+        return parsedSettings;
+      } else {
+        // No settings found, use defaults and save them
+        await AsyncStorage.setItem(storageKeys.SETTINGS, JSON.stringify(defaultSettings));
+        return defaultSettings;
+      }
+    } catch (error) {
+      console.error('Error loading settings:', error);
+      return defaultSettings;
+    }
+  };
+
   const loadAllData = async () => {
     try {
       const [
         scoresData,
         bookmarksData,
         progressData,
-        settingsData,
         completedData,
         categoryStatsData
       ] = await Promise.all([
         AsyncStorage.getItem(storageKeys.SCORES),
         AsyncStorage.getItem(storageKeys.BOOKMARKS),
         AsyncStorage.getItem(storageKeys.PROGRESS),
-        AsyncStorage.getItem(storageKeys.SETTINGS),
         AsyncStorage.getItem(storageKeys.COMPLETED_QUESTIONS),
         AsyncStorage.getItem(storageKeys.CATEGORY_STATS),
       ]);
 
+      // Use the settings loading function
+      const settings = await loadSettings();
+      
       const parsedScores = scoresData ? JSON.parse(scoresData) : [];
       const parsedCategoryStats = categoryStatsData ? JSON.parse(categoryStatsData) : {};
 
@@ -100,7 +129,7 @@ export function QuizProvider({ children }) {
           scores: parsedScores,
           bookmarks: bookmarksData ? JSON.parse(bookmarksData) : [],
           progress: progressData ? JSON.parse(progressData) : {},
-          settings: settingsData ? JSON.parse(settingsData) : defaultSettings,
+          settings: settings,
           completedQuestions: completedData ? JSON.parse(completedData) : {},
           categoryStats: parsedCategoryStats,
           statistics: updatedStats,

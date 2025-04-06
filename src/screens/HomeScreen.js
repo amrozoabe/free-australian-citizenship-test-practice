@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, ScrollView } from 'react-native';
 import { useQuiz } from '../contexts/QuizContext';
 import LanguageSelector from '../components/LanguageSelector';
+import FeedbackButton from '../components/SimpleFeedbackButton';
 
 export default function HomeScreen({ navigation }) {
   const { state } = useQuiz();
@@ -111,6 +112,7 @@ export default function HomeScreen({ navigation }) {
           </Text>
         )}
       </ScrollView>
+      <FeedbackButton />
     </SafeAreaView>
   );
 }

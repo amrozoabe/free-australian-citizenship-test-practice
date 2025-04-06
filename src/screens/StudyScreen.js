@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, ScrollView } from 'react-native';
 import { useQuiz } from '../contexts/QuizContext';
+import FeedbackButton from '../components/SimpleFeedbackButton';
 
 // Define study materials based on the four sections of the Australian Citizenship Test
 const studyMaterials = [
@@ -149,6 +150,7 @@ export default function StudyScreen({ navigation }) {
           ))}
         </View>
       </ScrollView>
+      <FeedbackButton />
     </SafeAreaView>
   );
 }

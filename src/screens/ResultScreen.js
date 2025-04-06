@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, ScrollView } from 'react-native';
 import { useQuiz } from '../contexts/QuizContext';
+import FeedbackButton from '../components/SimpleFeedbackButton';
 
 export default function ResultScreen({ route, navigation }) {
   const { score, total, answers = [] } = route.params;
@@ -267,6 +268,7 @@ export default function ResultScreen({ route, navigation }) {
           </TouchableOpacity>
         </View>
       </ScrollView>
+      <FeedbackButton />
     </SafeAreaView>
   );
 }

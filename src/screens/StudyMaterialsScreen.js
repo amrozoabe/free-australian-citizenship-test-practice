@@ -9,6 +9,7 @@ import {
   Linking 
 } from 'react-native';
 import { useQuiz } from '../contexts/QuizContext';
+import FeedbackButton from '../components/SimpleFeedbackButton';
 
 // Define study materials
 const studyMaterials = [
@@ -175,6 +176,7 @@ export default function StudyScreen({ navigation }) {
           </View>
         ))}
       </ScrollView>
+      <FeedbackButton />
     </SafeAreaView>
   );
 }

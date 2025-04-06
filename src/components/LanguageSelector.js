@@ -1,12 +1,13 @@
 // src/components/LanguageSelector.js
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, ActivityIndicator } from 'react-native';
 import { useQuiz } from '../contexts/QuizContext';
 import { SUPPORTED_LANGUAGES } from '../constants/languages';
 import { SET_NATIVE_LANGUAGE } from '../contexts/QuizContext';
 
 const LanguageSelector = () => {
-  const [modalVisible, setModalVisible] = React.useState(false);
+  const [modalVisible, setModalVisible] = useState(false);
+  const [saving, setSaving] = useState(false);
   const { state, dispatch } = useQuiz();
   const currentLanguage = state.settings?.nativeLanguage || 'en';
 
@@ -16,12 +17,20 @@ const LanguageSelector = () => {
     `${currentLanguageData.name} (${currentLanguageData.nativeName})` : 
     'English';
 
-  const handleSelectLanguage = (languageCode) => {
-    dispatch({
+  const handleSelectLanguage = async (languageCode) => {
+    setSaving(true);
+    
+    // Save user's language selection
+    await dispatch({
       type: SET_NATIVE_LANGUAGE,
       payload: languageCode
     });
-    setModalVisible(false);
+    
+    // Show brief saving indicator before closing modal
+    setTimeout(() => {
+      setSaving(false);
+      setModalVisible(false);
+    }, 500);
   };
 
   return (
@@ -66,31 +75,49 @@ const LanguageSelector = () => {
               </TouchableOpacity>
             </View>
             
-            <ScrollView style={styles.languageList}>
-              {SUPPORTED_LANGUAGES.map((language) => (
-                <TouchableOpacity
-                  key={language.code}
-                  style={[
-                    styles.languageItem,
-                    currentLanguage === language.code && styles.selectedLanguageItem
-                  ]}
-                  onPress={() => handleSelectLanguage(language.code)}
-                >
-                  <Text style={[
-                    styles.languageItemName,
-                    { color: state.settings?.theme === 'dark' ? '#fff' : '#333' }
-                  ]}>
-                    {language.name}
-                  </Text>
-                  <Text style={[
-                    styles.languageItemNative,
-                    { color: state.settings?.theme === 'dark' ? '#ccc' : '#666' }
-                  ]}>
-                    {language.nativeName}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
+            {saving ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color="#007AFF" />
+                <Text style={{ 
+                  marginTop: 10, 
+                  color: state.settings?.theme === 'dark' ? '#fff' : '#333'
+                }}>
+                  Saving your language preference...
+                </Text>
+              </View>
+            ) : (
+              <ScrollView style={styles.languageList}>
+                {SUPPORTED_LANGUAGES.map((language) => (
+                  <TouchableOpacity
+                    key={language.code}
+                    style={[
+                      styles.languageItem,
+                      currentLanguage === language.code && styles.selectedLanguageItem
+                    ]}
+                    onPress={() => handleSelectLanguage(language.code)}
+                  >
+                    <View style={styles.languageItemContent}>
+                      <Text style={[
+                        styles.languageItemName,
+                        { color: state.settings?.theme === 'dark' ? '#fff' : '#333' }
+                      ]}>
+                        {language.name}
+                      </Text>
+                      <Text style={[
+                        styles.languageItemNative,
+                        { color: state.settings?.theme === 'dark' ? '#ccc' : '#666' }
+                      ]}>
+                        {language.nativeName}
+                      </Text>
+                    </View>
+                    
+                    {currentLanguage === language.code && (
+                      <Text style={styles.checkmark}>✓</Text>
+                    )}
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            )}
           </View>
         </View>
       </Modal>
@@ -160,9 +187,15 @@ const styles = StyleSheet.create({
     padding: 10,
   },
   languageItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     padding: 15,
     borderBottomWidth: 1,
     borderBottomColor: '#eee',
+  },
+  languageItemContent: {
+    flex: 1,
   },
   selectedLanguageItem: {
     backgroundColor: 'rgba(0, 122, 255, 0.1)',
@@ -174,6 +207,16 @@ const styles = StyleSheet.create({
   languageItemNative: {
     fontSize: 14,
     marginTop: 4,
+  },
+  checkmark: {
+    fontSize: 20,
+    color: '#007AFF',
+    fontWeight: 'bold',
+  },
+  loadingContainer: {
+    padding: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
   }
 });
 

@@ -9,6 +9,7 @@ import {
   Dimensions
 } from 'react-native';
 import { useQuiz } from '../contexts/QuizContext';
+import FeedbackButton from '../components/SimpleFeedbackButton';
 
 const StatCard = ({ title, value, suffix = '', theme }) => (
   <View style={[
@@ -512,6 +513,7 @@ export default function StatisticsScreen({ navigation }) {
           </>
         )}
       </ScrollView>
+      <FeedbackButton />
     </SafeAreaView>
   );
 }

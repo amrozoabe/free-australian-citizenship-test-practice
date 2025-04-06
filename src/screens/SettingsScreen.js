@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, Switch, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
 import { useQuiz } from '../contexts/QuizContext';
+import FeedbackButton from '../components/SimpleFeedbackButton';
 
 export default function SettingsScreen({ navigation }) {
   const { state, dispatch } = useQuiz();

@@ -1,9 +1,18 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, ScrollView, Alert } from 'react-native';
 import { useQuiz } from '../contexts/QuizContext';
-import { questions } from '../data/questions';
+import FeedbackButton from '../components/SimpleFeedbackButton';
 
 export default function BookmarksScreen({ navigation }) {
+  // Use try-catch for importing questions to handle possible import errors
+  let questions = [];
+  try {
+    const questionsModule = require('../data/questions');
+    questions = questionsModule.questions || [];
+  } catch (error) {
+    console.error('Error loading questions:', error);
+  }
+
   const { state, dispatch } = useQuiz();
   const { bookmarks, settings } = state;
 
@@ -11,71 +20,90 @@ export default function BookmarksScreen({ navigation }) {
     navigation.navigate('Home');
   };
 
-  const bookmarkedQuestions = questions.filter(q => bookmarks.includes(q.id));
+  // Filter questions to find bookmarked ones - with safety checks
+  const bookmarkedQuestions = Array.isArray(questions) && Array.isArray(bookmarks) 
+    ? questions.filter(q => q && bookmarks.includes(q.id))
+    : [];
 
   const handleRemoveBookmark = (questionId) => {
     dispatch({
       type: 'TOGGLE_BOOKMARK',
       payload: questionId
     });
+    
+    // Show feedback to the user
+    Alert.alert(
+      "Bookmark Removed",
+      "This question has been removed from your bookmarks.",
+      [{ text: "OK" }]
+    );
   };
 
-  const QuestionCard = ({ question }) => (
-    <View style={[
-      styles.card,
-      { backgroundColor: settings.theme === 'dark' ? '#333' : 'white' }
-    ]}>
-      <View style={styles.cardHeader}>
-        <Text style={[
-          styles.questionText,
-          { color: settings.theme === 'dark' ? '#fff' : '#1a1a1a' }
-        ]}>
-          {question.question}
-        </Text>
-        <TouchableOpacity
-          style={styles.bookmarkButton}
-          onPress={() => handleRemoveBookmark(question.id)}
-        >
-          <Text style={styles.bookmarkIcon}>🔖</Text>
-        </TouchableOpacity>
-      </View>
-
-      <View style={styles.optionsContainer}>
-        {question.options.map((option, index) => (
-          <View
-            key={index}
-            style={[
-              styles.optionItem,
-              index === question.correct && styles.correctOption,
-            ]}
-          >
-            <Text style={[
-              styles.optionText,
-              index === question.correct && styles.correctOptionText,
-              { color: settings.theme === 'dark' ? '#fff' : '#1a1a1a' }
-            ]}>
-              {option}
-            </Text>
-            {index === question.correct && (
-              <Text style={styles.correctBadge}>✓</Text>
-            )}
-          </View>
-        ))}
-      </View>
-
-      <Text style={[
-        styles.explanationText,
-        { color: settings.theme === 'dark' ? '#ccc' : '#666' }
+  // Component for a single question card - with null checks throughout
+  const QuestionCard = ({ question }) => {
+    if (!question) return null;
+    
+    return (
+      <View style={[
+        styles.card,
+        { backgroundColor: settings?.theme === 'dark' ? '#333' : 'white' }
       ]}>
-        {question.explanation}
-      </Text>
-    </View>
-  );
+        <View style={styles.cardHeader}>
+          <Text style={[
+            styles.questionText,
+            { color: settings?.theme === 'dark' ? '#fff' : '#1a1a1a' }
+          ]}>
+            {typeof question.question === 'string' ? question.question : 'No question text'}
+          </Text>
+          <TouchableOpacity
+            style={styles.bookmarkButton}
+            onPress={() => handleRemoveBookmark(question.id)}
+          >
+            <Text style={styles.bookmarkIcon}>🔖</Text>
+          </TouchableOpacity>
+        </View>
+
+        {Array.isArray(question.options) && (
+          <View style={styles.optionsContainer}>
+            {question.options.map((option, index) => (
+              <View
+                key={index}
+                style={[
+                  styles.optionItem,
+                  question.correct !== undefined && index === question.correct && styles.correctOption,
+                ]}
+              >
+                <Text style={[
+                  styles.optionText,
+                  question.correct !== undefined && index === question.correct && styles.correctOptionText,
+                  { color: settings?.theme === 'dark' ? '#fff' : '#1a1a1a' }
+                ]}>
+                  {option || 'No option text'}
+                </Text>
+                {question.correct !== undefined && index === question.correct && (
+                  <Text style={styles.correctBadge}>✓</Text>
+                )}
+              </View>
+            ))}
+          </View>
+        )}
+
+        {question.explanation && (
+          <Text style={[
+            styles.explanationText,
+            { color: settings?.theme === 'dark' ? '#ccc' : '#666' }
+          ]}>
+            {question.explanation}
+          </Text>
+        )}
+      </View>
+    );
+  };
 
   return (
     <SafeAreaView style={[
       styles.container,
-      { backgroundColor: settings.theme === 'dark' ? '#1a1a1a' : '#f5f5f5' }
+      { backgroundColor: settings?.theme === 'dark' ? '#1a1a1a' : '#f5f5f5' }
     ]}>
       <View style={styles.header}>
         <TouchableOpacity onPress={handleExit} style={styles.exitButton}>
@@ -83,23 +111,26 @@ export default function BookmarksScreen({ navigation }) {
         </TouchableOpacity>
         <Text style={[
           styles.title,
-          { color: settings.theme === 'dark' ? '#fff' : '#1a1a1a' }
+          { color: settings?.theme === 'dark' ? '#fff' : '#1a1a1a' }
         ]}>
           Bookmarks
         </Text>
-        <View style={styles.exitButton} /> {/* Empty view for flex spacing */}
+        <View style={styles.exitButton}>
+          {/* Empty view for flex spacing - ensure no raw text here */}
+        </View>
       </View>
+      
       <ScrollView style={styles.scrollView}>
-        <View style={styles.header}>
+        <View style={styles.headerContent}>
           <Text style={[
-            styles.title,
-            { color: settings.theme === 'dark' ? '#fff' : '#1a1a1a' }
+            styles.subtitle,
+            { color: settings?.theme === 'dark' ? '#fff' : '#1a1a1a' }
           ]}>
             Bookmarked Questions
           </Text>
           <Text style={[
-            styles.subtitle,
-            { color: settings.theme === 'dark' ? '#ccc' : '#666' }
+            styles.subtitleCount,
+            { color: settings?.theme === 'dark' ? '#ccc' : '#666' }
           ]}>
             {bookmarkedQuestions.length} saved questions
           </Text>
@@ -109,7 +140,7 @@ export default function BookmarksScreen({ navigation }) {
           <View style={styles.emptyContainer}>
             <Text style={[
               styles.emptyText,
-              { color: settings.theme === 'dark' ? '#ccc' : '#666' }
+              { color: settings?.theme === 'dark' ? '#ccc' : '#666' }
             ]}>
               No bookmarked questions yet.{'\n'}
               Bookmark questions during practice to review them later.
@@ -129,6 +160,7 @@ export default function BookmarksScreen({ navigation }) {
           </View>
         )}
       </ScrollView>
+      <FeedbackButton />
     </SafeAreaView>
   );
 }
@@ -147,6 +179,10 @@ const styles = StyleSheet.create({
     padding: 20,
     paddingBottom: 10,
   },
+  headerContent: {
+    padding: 20,
+    paddingTop: 0,
+  },
   exitButton: {
     width: 80, // Fixed width for balanced spacing
   },
@@ -159,12 +195,12 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     textAlign: 'center',
   },
-  title: {
-    fontSize: 28,
+  subtitle: {
+    fontSize: 24,
     fontWeight: 'bold',
     marginBottom: 10,
   },
-  subtitle: {
+  subtitleCount: {
     fontSize: 16,
     marginBottom: 20,
   },

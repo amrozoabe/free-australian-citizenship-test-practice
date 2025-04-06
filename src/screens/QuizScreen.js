@@ -1,4 +1,4 @@
-// Enhanced QuizScreen.js with improved tracking
+// Enhanced QuizScreen.js with improved tracking and bookmark feature
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, ScrollView, Animated, Vibration, Alert, Modal } from 'react-native';
 import { useQuiz } from '../contexts/QuizContext';
@@ -8,6 +8,7 @@ import { analyzeQuestionAndOptions, getFallbackAnalysis } from '../services/keyw
 import HelpModal from '../components/quiz/HelpModal';
 import UnifiedQuestionText from '../components/quiz/UnifiedQuestionText';
 import { SUPPORTED_LANGUAGES } from '../constants/languages';
+import FeedbackButton from '../components/SimpleFeedbackButton';
 
 // Define translations for "Need Help?" in different languages
 const HELP_BUTTON_TRANSLATIONS = {
@@ -141,6 +142,7 @@ export default function QuizScreen({ navigation, route }) {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [startTime, setStartTime] = useState(null);
   const [timeSpent, setTimeSpent] = useState(0);
+  const [showBookmarkButton, setShowBookmarkButton] = useState(true);
   
   // Help modal state variables
   const [showHelpModal, setShowHelpModal] = useState(false);
@@ -173,8 +175,9 @@ export default function QuizScreen({ navigation, route }) {
         clearInterval(timerRef.current);
       }
     };
-  }, [startTime]);
+  }, []); // Empty dependency array - only run once on mount
 
+  // Set up questions when mode or category changes
   useEffect(() => {
     // Get questions based on mode and category
     const selectedQuestions = getQuestionsForQuiz(questions, mode, category);
@@ -191,7 +194,42 @@ export default function QuizScreen({ navigation, route }) {
     
     // Log the number of questions for debugging
     console.log(`Quiz mode: ${mode}, category: ${category}, questions: ${finalQuestions.length}`);
-  }, [mode, category]);
+  }, [mode, category]); // Only depend on mode and category
+
+  // Bookmark handling function
+  const handleBookmark = (questionId) => {
+    if (!questionId) return;
+    
+    // Check if it's already bookmarked before making the change
+    const isCurrentlyBookmarked = state.bookmarks.includes(questionId);
+    
+    dispatch({
+      type: 'TOGGLE_BOOKMARK',
+      payload: questionId
+    });
+    
+    // Show feedback to the user
+    if (isCurrentlyBookmarked) {
+      // It was bookmarked and now it's being removed
+      Alert.alert(
+        "Bookmark Removed",
+        "This question has been removed from your bookmarks.",
+        [{ text: "OK" }]
+      );
+    } else {
+      // It wasn't bookmarked and now it is
+      Alert.alert(
+        "Bookmark Added",
+        "This question has been added to your bookmarks. You can review it later in the Bookmarks section.",
+        [{ text: "OK" }]
+      );
+    }
+  };
+
+  // Check if a question is bookmarked
+  const isQuestionBookmarked = (questionId) => {
+    return Array.isArray(state.bookmarks) && state.bookmarks.includes(questionId);
+  };
 
   // Function to handle the help button press
   const handleHelpPress = async () => {
@@ -213,198 +251,6 @@ export default function QuizScreen({ navigation, route }) {
         currentQ.options, 
         userLanguage
       );
-}
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  scrollContainer: {
-    padding: 20,
-    paddingTop: 60, // Extra padding for notch
-    minHeight: '100%',
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  exitButton: {
-    padding: 10,
-  },
-  exitButtonText: {
-    color: '#ff3b30',
-    fontSize: 16,
-  },
-  questionCounter: {
-    backgroundColor: 'rgba(0,0,0,0.05)',
-    paddingHorizontal: 15,
-    paddingVertical: 5,
-    borderRadius: 15,
-  },
-  questionCounterText: {
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  infoContainer: {
-    flexDirection: 'column',
-    alignItems: 'flex-end',
-  },
-  modeIndicator: {
-    fontSize: 14,
-    marginBottom: 4,
-  },
-  timerText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#ff9500', // Orange color for timer
-  },
-  sectionIndicator: {
-    fontSize: 14,
-    fontStyle: 'italic',
-    marginBottom: 15,
-    textAlign: 'center',
-  },
-  questionText: {
-    fontSize: 22,
-    fontWeight: '600',
-    marginBottom: 15,
-  },
-  helpButton: {
-    backgroundColor: '#f0f0f0',
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 20,
-    paddingVertical: 8,
-    paddingHorizontal: 15,
-    alignSelf: 'flex-end',
-    marginBottom: 15,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  helpButtonText: {
-    color: '#007AFF',
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  optionsContainer: {
-    marginTop: 10,
-    marginBottom: 20,
-  },
-  optionButton: {
-    backgroundColor: 'white',
-    padding: 15,
-    borderRadius: 10,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#ddd',
-  },
-  optionText: {
-    fontSize: 16,
-  },
-  selectedOption: {
-    backgroundColor: '#e3f2fd',
-    borderColor: '#007AFF',
-  },
-  correctOption: {
-    backgroundColor: '#edf7ed',
-    borderColor: '#4caf50',
-  },
-  wrongOption: {
-    backgroundColor: '#fdecea',
-    borderColor: '#f44336',
-  },
-  explanationContainer: {
-    padding: 15,
-    backgroundColor: 'rgba(0, 0, 0, 0.05)',
-    borderRadius: 10,
-    marginTop: 10,
-    marginBottom: 20,
-  },
-  explanationTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginBottom: 8,
-  },
-  explanationText: {
-    fontSize: 14,
-    lineHeight: 22,
-  },
-  navigationButtons: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 20,
-  },
-  navButton: {
-    backgroundColor: '#007AFF',
-    padding: 15,
-    borderRadius: 25,
-    minWidth: 120,
-    alignItems: 'center',
-  },
-  disabledButton: {
-    backgroundColor: '#ccc',
-  },
-  navButtonText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  modalContent: {
-    width: '90%',
-    maxHeight: '80%',
-    backgroundColor: 'white',
-    borderRadius: 15,
-    padding: 20,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 15,
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-  },
-  closeButton: {
-    fontSize: 24,
-    color: '#666',
-  },
-  questionList: {
-    maxHeight: '90%',
-  },
-  questionItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
-  },
-  currentQuestionItem: {
-    backgroundColor: 'rgba(0,122,255,0.1)',
-  },
-  answeredQuestionItem: {
-    opacity: 0.8,
-  },
-  questionItemText: {
-    flex: 1,
-    fontSize: 16,
-  },
-  questionStatus: {
-    marginLeft: 10,
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-});
       
       // Set the terms for both the help modal and the question explanation section
       setHelpTerms(result.terms || []);
@@ -567,6 +413,8 @@ const styles = StyleSheet.create({
                 key={index}
                 style={[
                   styles.questionItem,
+                  currentQuestion === index && // Continue from the previous code snippet
+                  styles.questionItem,
                   currentQuestion === index && styles.currentQuestionItem,
                   answers[index] && styles.answeredQuestionItem
                 ]}
@@ -591,6 +439,7 @@ const styles = StyleSheet.create({
               </TouchableOpacity>
             ))}
           </ScrollView>
+          <FeedbackButton />
         </View>
       </View>
     </Modal>
@@ -598,15 +447,22 @@ const styles = StyleSheet.create({
 
   if (quizQuestions.length === 0) {
     return (
-      <View style={styles.container}>
-        <Text>Loading...</Text>
-      </View>
+      <SafeAreaView style={[
+        styles.container,
+        { backgroundColor: state.settings?.theme === 'dark' ? '#1a1a1a' : '#f5f5f5' }
+      ]}>
+        <View style={styles.loadingContainer}>
+          <Text style={{ color: state.settings?.theme === 'dark' ? '#fff' : '#333' }}>
+            Loading questions...
+          </Text>
+        </View>
+      </SafeAreaView>
     );
   }
 
-  const currentQuestionText = typeof quizQuestions[currentQuestion].question === 'string'
+  const currentQuestionText = typeof quizQuestions[currentQuestion]?.question === 'string'
     ? quizQuestions[currentQuestion].question
-    : quizQuestions[currentQuestion].question?.text || '';
+    : quizQuestions[currentQuestion]?.question?.text || 'No question text available';
 
   return (
     <SafeAreaView style={[
@@ -644,14 +500,12 @@ const styles = StyleSheet.create({
           </TouchableOpacity>
           
           <View style={styles.infoContainer}>
-            <Text style={styles.modeIndicator}>
+            <Text style={[
+              styles.modeIndicator,
+              { color: state.settings?.theme === 'dark' ? '#ddd' : '#333' }
+            ]}>
               {mode === 'practice' ? '🎯 Practice' : '📝 Quiz'}
             </Text>
-            
-            {/* Timer for non-practice mode */}
-            {mode !== 'practice' && (
-              <Text style={styles.timerText}>⏱️ {formatTime(timeSpent)}</Text>
-            )}
           </View>
         </View>
 
@@ -666,30 +520,45 @@ const styles = StyleSheet.create({
         )}
 
         {/* Question content */}
-<Animated.View style={{ opacity: fadeAnim }}>
-  {/* Use the UnifiedQuestionText component */}
-  <UnifiedQuestionText 
-  text={currentQuestionText}
-  keywords={termsAnalysis.map(term => ({ 
-    word: term.term, 
-    definition: term.explanation,
-    translations: { [userLanguage]: term.translation }
-  }))}
-  showDefinitions={false}
-  highlightKeywords={false} // Add this prop to disable keyword highlighting
-  userLanguage={userLanguage}
-  />
+        <Animated.View style={{ opacity: fadeAnim }}>
+          {/* Use the UnifiedQuestionText component */}
+          <UnifiedQuestionText 
+            text={currentQuestionText}
+            keywords={termsAnalysis.map(term => ({ 
+              word: term.term, 
+              definition: term.explanation,
+              translations: { [userLanguage]: term.translation }
+            }))}
+            showDefinitions={false}
+            highlightKeywords={false} // Add this prop to disable keyword highlighting
+            userLanguage={userLanguage}
+          />
 
-  {/* Help button with translated text */}
-  <TouchableOpacity 
-    style={styles.helpButton}
-    onPress={handleHelpPress}
-  >
-    <Text style={styles.helpButtonText}>{getHelpButtonText()}</Text>
-  </TouchableOpacity>
+          {/* Action buttons - Help and Bookmark */}
+          <View style={styles.questionActions}>
+            {/* Help button with translated text */}
+            <TouchableOpacity 
+              style={styles.helpButton}
+              onPress={handleHelpPress}
+            >
+              <Text style={styles.helpButtonText}>{getHelpButtonText()}</Text>
+            </TouchableOpacity>
+            
+            {/* Bookmark button */}
+            {showBookmarkButton && quizQuestions[currentQuestion]?.id && (
+              <TouchableOpacity 
+                style={styles.bookmarkButton}
+                onPress={() => handleBookmark(quizQuestions[currentQuestion].id)}
+              >
+                <Text style={styles.bookmarkIcon}>
+                  {isQuestionBookmarked(quizQuestions[currentQuestion].id) ? '🔖' : '📑'}
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
 
           <View style={styles.optionsContainer}>
-            {quizQuestions[currentQuestion].options.map((option, index) => (
+            {quizQuestions[currentQuestion]?.options?.map((option, index) => (
               <TouchableOpacity
                 key={`option-${index}`}
                 style={[
@@ -726,21 +595,12 @@ const styles = StyleSheet.create({
                 styles.explanationText,
                 { color: state.settings?.theme === 'dark' ? '#ddd' : '#333' }
               ]}>
-                {quizQuestions[currentQuestion].explanation}
+                {quizQuestions[currentQuestion].explanation || 'No explanation available.'}
               </Text>
             </View>
           )}
           
-          {/* Terms analysis - only shown after "Need Help?" is clicked */}
-          {termsAnalysis.length > 0 && (
-            <QuestionExplainer 
-              terms={termsAnalysis} 
-              isLoading={isAnalyzing}
-            />
-          )}
-        </Animated.View>
-
-        {/* Navigation buttons */}
+          {/* Navigation buttons */}
         <View style={styles.navigationButtons}>
           <TouchableOpacity
             style={[styles.navButton, currentQuestion === 0 && styles.disabledButton]}
@@ -764,6 +624,229 @@ const styles = StyleSheet.create({
             </TouchableOpacity>
           )}
         </View>
+
+          {/* Terms analysis - only shown after "Need Help?" is clicked */}
+          {termsAnalysis.length > 0 && (
+            <QuestionExplainer 
+              terms={termsAnalysis} 
+              isLoading={isAnalyzing}
+            />
+          )}
+        </Animated.View>
+
       </ScrollView>
     </SafeAreaView>
   );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  scrollContainer: {
+    padding: 20,
+    paddingTop: 60, // Extra padding for notch
+    minHeight: '100%',
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  exitButton: {
+    padding: 10,
+  },
+  exitButtonText: {
+    color: '#ff3b30',
+    fontSize: 16,
+  },
+  questionCounter: {
+    backgroundColor: 'rgba(0,0,0,0.05)',
+    paddingHorizontal: 15,
+    paddingVertical: 5,
+    borderRadius: 15,
+  },
+  questionCounterText: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  infoContainer: {
+    flexDirection: 'column',
+    alignItems: 'flex-end',
+  },
+  modeIndicator: {
+    fontSize: 14,
+    marginBottom: 4,
+  },
+  timerText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#ff9500', // Orange color for timer
+  },
+  sectionIndicator: {
+    fontSize: 14,
+    fontStyle: 'italic',
+    marginBottom: 15,
+    textAlign: 'center',
+  },
+  questionText: {
+    fontSize: 22,
+    fontWeight: '600',
+    marginBottom: 15,
+  },
+  questionActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    marginBottom: 15,
+  },
+  helpButton: {
+    backgroundColor: '#f0f0f0',
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 20,
+    paddingVertical: 8,
+    paddingHorizontal: 15,
+    alignItems: 'center',
+  },
+  helpButtonText: {
+    color: '#007AFF',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  bookmarkButton: {
+    backgroundColor: '#f0f0f0',
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 20,
+    padding: 8,
+    marginLeft: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  bookmarkIcon: {
+    fontSize: 18,
+  },
+  optionsContainer: {
+    marginTop: 10,
+    marginBottom: 20,
+  },
+  optionButton: {
+    backgroundColor: 'white',
+    padding: 15,
+    borderRadius: 10,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#ddd',
+  },
+  optionText: {
+    fontSize: 16,
+  },
+  selectedOption: {
+    backgroundColor: '#e3f2fd',
+    borderColor: '#007AFF',
+  },
+  correctOption: {
+    backgroundColor: '#edf7ed',
+    borderColor: '#4caf50',
+  },
+  wrongOption: {
+    backgroundColor: '#fdecea',
+    borderColor: '#f44336',
+  },
+  explanationContainer: {
+    padding: 15,
+    backgroundColor: 'rgba(0, 0, 0, 0.05)',
+    borderRadius: 10,
+    marginTop: 10,
+    marginBottom: 20,
+  },
+  explanationTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 8,
+  },
+  explanationText: {
+    fontSize: 14,
+    lineHeight: 22,
+  },
+  navigationButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 20,
+  },
+  navButton: {
+    backgroundColor: '#007AFF',
+    padding: 15,
+    borderRadius: 25,
+    minWidth: 120,
+    alignItems: 'center',
+  },
+  disabledButton: {
+    backgroundColor: '#ccc',
+  },
+  navButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    width: '90%',
+    maxHeight: '80%',
+    backgroundColor: 'white',
+    borderRadius: 15,
+    padding: 20,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 15,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+  },
+  closeButton: {
+    fontSize: 24,
+    color: '#666',
+  },
+  questionList: {
+    maxHeight: '90%',
+  },
+  questionItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+  },
+  currentQuestionItem: {
+    backgroundColor: 'rgba(0,122,255,0.1)',
+  },
+  answeredQuestionItem: {
+    opacity: 0.8,
+  },
+  questionItemText: {
+    flex: 1,
+    fontSize: 16,
+  },
+  questionStatus: {
+    marginLeft: 10,
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+});
