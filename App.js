@@ -9,6 +9,10 @@ import StudyScreen from './src/screens/StudyScreen';
 import StatisticsScreen from './src/screens/StatisticsScreen';
 import BookmarksScreen from './src/screens/BookmarksScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
+import BookingScreen from './src/screens/BookingScreen';
+import MigrationServicesScreen from './src/screens/MigrationServicesScreen';
+import LegalScreen from './src/screens/LegalScreen';
+import AboutScreen from './src/screens/AboutScreen';
 import AppInitializer from './src/utils/AppInitializer';
 import { View, Text, ActivityIndicator } from 'react-native';
 
@@ -64,6 +68,10 @@ export default function App() {
           <Stack.Screen name="Statistics" component={StatisticsScreen} />
           <Stack.Screen name="Bookmarks" component={BookmarksScreen} />
           <Stack.Screen name="Settings" component={SettingsScreen} />
+          <Stack.Screen name="Booking" component={BookingScreen} />
+          <Stack.Screen name="MigrationServices" component={MigrationServicesScreen} />
+          <Stack.Screen name="Legal" component={LegalScreen} />
+          <Stack.Screen name="About" component={AboutScreen} />
         </Stack.Navigator>
       </NavigationContainer>
     </QuizProvider>

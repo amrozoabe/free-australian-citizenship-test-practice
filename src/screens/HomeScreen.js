@@ -89,6 +89,18 @@ export default function HomeScreen({ navigation }) {
             color="#FF9500"
           />
           <MenuButton
+            title="Book a Tutor"
+            icon="👨‍🏫"
+            onPress={() => navigation.navigate('Booking')}
+            color="#FF2D55"
+          />
+          <MenuButton
+            title="Migration Help"
+            icon="🧩"
+            onPress={() => navigation.navigate('MigrationServices')}
+            color="#9370DB"
+          />
+          <MenuButton
             title="Settings"
             icon="⚙️"
             onPress={() => navigation.navigate('Settings')}
@@ -98,7 +110,7 @@ export default function HomeScreen({ navigation }) {
             title="Practice Mode"
             icon="🎯"
             onPress={() => navigation.navigate('Quiz', { mode: 'practice' })}
-            color="#FF2D55"
+            color="#FF3B30"
           />
         </View>
 

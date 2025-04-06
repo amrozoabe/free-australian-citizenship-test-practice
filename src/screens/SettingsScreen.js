@@ -75,18 +75,6 @@ export default function SettingsScreen({ navigation }) {
             />
           </View>
 
-          <View style={styles.setting}>
-            <Text style={[
-              styles.settingText,
-              { color: settings.theme === 'dark' ? '#fff' : '#1a1a1a' }
-            ]}>
-              Vibration
-            </Text>
-            <Switch
-              value={settings.vibrationEnabled}
-              onValueChange={(value) => updateSetting('vibrationEnabled', value)}
-            />
-          </View>
         </View>
 
         <View style={styles.section}>
@@ -112,7 +100,48 @@ export default function SettingsScreen({ navigation }) {
             styles.sectionTitle,
             { color: settings.theme === 'dark' ? '#fff' : '#1a1a1a' }
           ]}>
-            About
+            Information
+          </Text>
+          
+          <TouchableOpacity 
+            style={[
+              styles.infoButton,
+              { backgroundColor: settings.theme === 'dark' ? '#333' : '#fff' }
+            ]}
+            onPress={() => navigation.navigate('About')}
+          >
+            <Text style={[
+              styles.infoButtonText,
+              { color: settings.theme === 'dark' ? '#fff' : '#1a1a1a' }
+            ]}>
+              About This App
+            </Text>
+            <Text style={styles.chevron}>›</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={[
+              styles.infoButton,
+              { backgroundColor: settings.theme === 'dark' ? '#333' : '#fff' }
+            ]}
+            onPress={() => navigation.navigate('Legal')}
+          >
+            <Text style={[
+              styles.infoButtonText,
+              { color: settings.theme === 'dark' ? '#fff' : '#1a1a1a' }
+            ]}>
+              Legal Information
+            </Text>
+            <Text style={styles.chevron}>›</Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={[
+            styles.sectionTitle,
+            { color: settings.theme === 'dark' ? '#fff' : '#1a1a1a' }
+          ]}>
+            App Version
           </Text>
           <Text style={[
             styles.aboutText,
@@ -181,6 +210,26 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 16,
     fontWeight: '600',
+  },
+  infoButton: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 15,
+    borderRadius: 10,
+    marginBottom: 10,
+    elevation: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+  },
+  infoButtonText: {
+    fontSize: 16,
+  },
+  chevron: {
+    fontSize: 22,
+    color: '#8E8E93',
   },
   aboutText: {
     fontSize: 16,
